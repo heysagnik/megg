@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import 'api_client.dart';
 import 'cache_service.dart';
@@ -72,7 +73,7 @@ class TrendingService {
     try {
       await _apiClient.post('/trending/click/$productId');
     } catch (e) {
-      print('Warning: Failed to track click: $e');
+      debugPrint('Warning: Failed to track click: $e');
     }
   }
 }

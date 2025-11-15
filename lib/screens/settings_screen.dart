@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/aesthetic_app_bar.dart';
+import '../services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -9,7 +10,20 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final _notificationService = NotificationService();
   bool _notificationsEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationPreference();
+  }
+
+  Future<void> _loadNotificationPreference() async {
+    setState(() {
+      _notificationsEnabled = _notificationService.notificationsEnabled;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,12 +89,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         trailing: Switch(
           value: _notificationsEnabled,
-          onChanged: (value) {
+          onChanged: (value) async {
             setState(() {
               _notificationsEnabled = value;
             });
+            await _notificationService.setNotificationsEnabled(value);
           },
-          activeColor: Colors.black,
+          activeThumbColor: Colors.black,
         ),
       ),
     );

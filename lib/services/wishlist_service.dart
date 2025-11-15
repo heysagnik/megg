@@ -42,7 +42,6 @@ class WishlistService {
 
     try {
       await _authService.ensureAuthenticated();
-      print(_authService.accessToken);
 
       final response = await _apiClient.get('/wishlist', requiresAuth: true);
       final wishlistData = response['data'] ?? response['wishlist'];
@@ -69,11 +68,9 @@ class WishlistService {
 
       return [];
     } catch (e) {
-      print('WishlistService: Error fetching wishlist: $e');
 
       final cachedData = await _cacheService.getListCache('wishlist');
       if (cachedData != null) {
-        print('WishlistService: Returning cached data');
         final products = cachedData
             .map((json) => Product.fromJson(json))
             .toList();

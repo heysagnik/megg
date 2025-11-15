@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'config/api_config.dart';
 import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
 import 'services/cache_service.dart';
+import 'services/notification_service.dart';
+import 'services/fcm_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,12 +21,18 @@ void main() async {
     debugPrint('Failed to load .env: $e');
   }
 
+  // Initialize Firebase
+  await Firebase.initializeApp();
+
   await Supabase.initialize(
     url: ApiConfig.supabaseUrl,
     anonKey: ApiConfig.supabaseAnonKey,
   );
 
   AuthService().setupAuthListener();
+
+  // Initialize Firebase Cloud Messaging
+  await FCMService().initialize();
 
   runApp(const MyApp());
 }
@@ -36,9 +45,25 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  final _notificationService = NotificationService();
+  final _fcmService = FCMService();
+
+  @override
+  void initState() {
+    super.initState();
+    _notificationService.initialize();
+  }
+
+  @override
+  void dispose() {
+    _notificationService.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _fcmService.navigatorKey,
       title: 'Megg',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

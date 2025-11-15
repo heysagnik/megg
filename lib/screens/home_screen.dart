@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:megg/screens/search_screen.dart';
+import 'package:megg/screens/notifications_screen.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'dart:async';
 import '../models/product.dart';
@@ -10,6 +11,7 @@ import '../services/trending_service.dart';
 import '../services/product_service.dart';
 import '../services/outfit_service.dart';
 import '../services/wishlist_service.dart';
+import '../services/notification_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'product_screen.dart';
 import 'search_results_screen.dart';
@@ -27,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ProductService _productService = ProductService();
   final OutfitService _outfitService = OutfitService();
   final WishlistService _wishlistService = WishlistService();
+  final NotificationService _notificationService = NotificationService();
 
   List<Product> _trendingProducts = [];
   List<Product> _newArrivals = [];
@@ -54,7 +57,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _outfitPageController = PageController(initialPage: _currentOutfitPage);
     _loadHomeData();
+    
   }
+
 
   Future<void> _loadHomeData() async {
     await Future.wait([
@@ -284,6 +289,18 @@ class _HomeScreenState extends State<HomeScreen> {
         title: 'MEGG',
         actions: [
           IconButton(
+            icon: Icon(PhosphorIconsRegular.bell, size: 20),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsScreen(),
+                ),
+              );
+            },
+            splashRadius: 20,
+          ),
+          IconButton(
             icon: Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
             onPressed: () {
               Navigator.push(
@@ -473,8 +490,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      print('Attempting to open outfit link: $link');
-
       // Ensure link has proper scheme
       String finalLink = link;
       if (!link.startsWith('http://') && !link.startsWith('https://')) {
@@ -482,17 +497,14 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       final uri = Uri.parse(finalLink);
-      print('Parsed URI: $uri');
 
       final canLaunch = await canLaunchUrl(uri);
-      print('Can launch URL: $canLaunch');
 
       if (canLaunch) {
         final launched = await launchUrl(
           uri,
           mode: LaunchMode.externalApplication,
         );
-        print('Launch result: $launched');
 
         if (!launched) {
           throw 'Failed to launch URL';
@@ -501,7 +513,6 @@ class _HomeScreenState extends State<HomeScreen> {
         throw 'Cannot launch URL';
       }
     } catch (e) {
-      print('Error opening outfit link: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

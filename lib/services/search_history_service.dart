@@ -14,12 +14,9 @@ class SearchHistoryService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final history = prefs.getStringList(_searchHistoryKey) ?? [];
-      print('Raw search history: $history');
       final displayed = history.take(_maxDisplayedItems).toList();
-      print('Displayed search history: $displayed');
       return displayed;
-    } catch (e) {
-      print('Error loading search history: $e');
+    } catch (_) {
       return [];
     }
   }

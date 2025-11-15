@@ -769,7 +769,7 @@ class _ColorMatchBanner extends StatelessWidget {
                     ),
                   ),
                 );
-              }).toList(),
+              }),
             ],
           ),
         ],
