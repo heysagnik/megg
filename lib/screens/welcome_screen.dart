@@ -330,7 +330,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
           // Tagline
           Text(
-            'Fashion Sale Alerts',
+            'Move • Match • Manifest',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w300,

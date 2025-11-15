@@ -184,13 +184,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   @override
   void dispose() {
     for (var controller in _pageControllers.values) {
-      controller.dispose();
+      controller.dispose(); // Dispose of page controllers
     }
     for (var timer in _autoScrollTimers.values) {
-      timer.cancel();
+      timer.cancel(); // Cancel auto-scroll timers
     }
     for (var controller in _likeAnimations.values) {
-      controller.dispose();
+      controller.dispose(); // Dispose of like animations
     }
     super.dispose();
   }

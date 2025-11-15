@@ -12,11 +12,10 @@ void main() async {
   // Initialize cache service
   await CacheService().init();
 
-  // Load environment variables (.env preferred, fallback to .env.example). Ignore if missing.
   try {
     await dotenv.load(fileName: '.env');
-  } catch (_) {
-    // Ignore if .env file is missing
+  } catch (e) {
+    debugPrint('Failed to load .env: $e');
   }
 
   await Supabase.initialize(

@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ApiConfig {
   // Base URLs and keys loaded from .env with safe fallbacks
   static String get baseUrl => dotenv.maybeGet('BASE_URL') ?? '';
-
+  
   static String get apiBaseUrl => '$baseUrl/api';
 
   static String get supabaseUrl => dotenv.maybeGet('SUPABASE_URL') ?? '';

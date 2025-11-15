@@ -175,7 +175,6 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
           ),
         );
       }
-      print('Failed to toggle like: $e');
     }
   }
 
@@ -194,25 +193,20 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
     }
 
     try {
-      print('Attempting to open link: $link');
-
       String finalLink = link;
       if (!link.startsWith('http://') && !link.startsWith('https://')) {
         finalLink = 'https://$link';
       }
 
       final uri = Uri.parse(finalLink);
-      print('Parsed URI: $uri');
 
       final canLaunch = await canLaunchUrl(uri);
-      print('Can launch URL: $canLaunch');
 
       if (canLaunch) {
         final launched = await launchUrl(
           uri,
           mode: LaunchMode.externalApplication,
         );
-        print('Launch result: $launched');
 
         if (!launched) {
           throw 'Failed to launch URL';
@@ -221,7 +215,6 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
         throw 'Cannot launch URL';
       }
     } catch (e) {
-      print('Error opening link: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -471,7 +464,6 @@ class _ReelItemState extends State<_ReelItem>
         _controller!.play();
       }
     } catch (e) {
-      print('Error initializing video: $e');
       if (mounted) {
         setState(() {
           _hasError = true;

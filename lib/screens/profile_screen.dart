@@ -119,7 +119,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
     } catch (e) {
-      print('Cache load error: $e');
+      // Silently ignore cache errors in production; UI will refresh from network
     } finally {
       // Regardless of cache, refresh in background without loaders
       _refreshWishlistInBackground();
@@ -138,7 +138,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ..addAll(_wishlist.map((p) => p.id));
       });
     } catch (e) {
-      debugPrint('Wishlist refresh error: $e');
       // Keep showing cached UI on errors
     }
   }
@@ -275,7 +274,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 40),
           _buildProfileHeader(),
           const SizedBox(height: 32),
-          if (_authService.isAuthenticated) _buildFavouriteReelsButton(),
+          if (_authService.isAuthenticated)
+            _buildFavouriteReelsButton()
+          else
+            _buildSignInButton(),
           const SizedBox(height: 32),
           _buildWishlist(),
           const SizedBox(height: 24),
@@ -543,6 +545,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSignInButton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: OutlinedButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+            );
+          },
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: Colors.black.withOpacity(0.2), width: 1),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+            ),
+            backgroundColor: Colors.white,
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(PhosphorIconsRegular.user, size: 18, color: Colors.black),
+              SizedBox(width: 12),
+              Text(
+                'SIGN IN',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 2,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

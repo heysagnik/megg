@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:video_player/video_player.dart';
 import 'welcome_screen.dart';
 import 'main_navigation.dart';
-import '../services/api_client.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,197 +15,171 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+  late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-  bool? _healthOk;
-  bool _minTimeElapsed = false;
-  bool _navigated = false;
+  VideoPlayerController? _videoController;
+
+  bool _videoInitialized = false;
+  bool _videoCompleted = false;
+  bool _fadeStarted = false;
 
   @override
   void initState() {
     super.initState();
+    _initializeUI();
+    _initializeVideo();
+  }
 
-    // Subtle animation controller
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+  void _initializeUI() {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+    );
+
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 2200),
       vsync: this,
     );
 
-    // Fade in animation
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-      ),
+    _fadeAnimation = Tween<double>(begin: 0.15, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
 
-    // Subtle scale animation for refined entrance
-    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-      ),
-    );
-
-    // Start animation
-    _controller.forward();
-
-    // Fire-and-forget server health check
-    _checkHealth();
-
-    // Minimum display duration before we allow navigation
-    Timer(const Duration(milliseconds: 2500), () {
-      if (!mounted) return;
-      setState(() {
-        _minTimeElapsed = true;
-      });
-      _tryNavigate();
+    _fadeController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _navigateToNextScreen();
+      }
     });
   }
 
-  Future<void> _checkHealth() async {
+  Future<void> _initializeVideo() async {
+    _videoController = VideoPlayerController.asset('assets/animatedlogo.mp4');
+
     try {
-      final res = await ApiClient().get('/health');
-      final status = (res['status']?.toString().toLowerCase()) ?? '';
-      final ok =
-          res['success'] == true || status == 'ok' || status == 'healthy';
-      if (!mounted) return;
-      setState(() {
-        _healthOk = ok;
-      });
-      _tryNavigate();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _healthOk = false;
-      });
+      await _videoController!.initialize();
+      await _videoController!.setVolume(0.0);
+      await _videoController!.setLooping(false);
+      _videoController!.addListener(_onVideoProgress);
+
+      final duration = _videoController!.value.duration;
+      if (duration != Duration.zero) {
+        Timer(duration + const Duration(milliseconds: 100), () {
+          if (!_videoCompleted) _onVideoComplete();
+        });
+      }
+
+      await _videoController!.play();
+
+      if (mounted) {
+        setState(() => _videoInitialized = true);
+      }
+    } catch (e) {
+      debugPrint('Video initialization failed: $e');
+      if (mounted) {
+        setState(() => _videoInitialized = false);
+        _onVideoComplete();
+      }
     }
   }
 
-  void _tryNavigate() {
-    if (!mounted || _navigated) return;
-    if (_minTimeElapsed && _healthOk == true) {
-      _navigated = true;
-      final isAuthenticated =
-          Supabase.instance.client.auth.currentSession != null;
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              isAuthenticated ? const MainNavigation() : const WelcomeScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 600),
-        ),
-      );
+  void _onVideoProgress() {
+    if (_videoCompleted || _videoController == null) return;
+
+    final position = _videoController!.value.position;
+    final duration = _videoController!.value.duration;
+
+    if (!_fadeStarted && position >= const Duration(milliseconds: 2000)) {
+      _fadeStarted = true;
+      _fadeController.forward();
+    }
+
+    if (duration != Duration.zero &&
+        position >= duration - const Duration(milliseconds: 80)) {
+      _onVideoComplete();
     }
   }
 
-  void _retryHealthCheck() {
-    setState(() {
-      _healthOk = null; // clear state to hide error
-    });
-    _checkHealth();
+  void _onVideoComplete() {
+    if (_videoCompleted) return;
+
+    setState(() => _videoCompleted = true);
+
+    if (!_fadeStarted) {
+      _fadeStarted = true;
+      _fadeController.forward();
+    }
+  }
+
+  void _navigateToNextScreen() {
+    if (!mounted) return;
+
+    final isAuthenticated =
+        Supabase.instance.client.auth.currentSession != null;
+
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) =>
+            isAuthenticated ? const MainNavigation() : const WelcomeScreen(),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 100),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _fadeController.dispose();
+    _videoController?.removeListener(_onVideoProgress);
+    _videoController?.dispose();
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+      ),
+    );
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: ScaleTransition(
-            scale: _scaleAnimation,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Brand name with design system specs
-                const Text(
-                  'MEGG',
-                  style: TextStyle(
-                    fontFamily: 'FuturaCyrillicBook',
-                    fontSize: 56,
-                    fontWeight: FontWeight.w300,
-                    letterSpacing: 12,
-                    color: Colors.black,
-                    height: 1.0,
-                  ),
-                ),
-                const SizedBox(height: 24),
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          if (_videoInitialized && _videoController != null)
+            _buildVideoPlayer(),
+          if (_fadeStarted) _buildTransitionOverlay(),
+        ],
+      ),
+    );
+  }
 
-                // Minimal divider line (Zara style)
-                Container(
-                  width: 60,
-                  height: 1,
-                  color: Colors.black.withOpacity(0.3),
-                ),
-                const SizedBox(height: 24),
-
-                // Tagline with refined typography
-                Text(
-                  'FASHION SALE ALERTS',
-                  style: TextStyle(
-                    fontFamily: 'FuturaCyrillicBook',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 2.5,
-                    color: Colors.black.withOpacity(0.6),
-                    height: 1.0,
-                  ),
-                ),
-                if (_healthOk == false) ...[
-                  const SizedBox(height: 16),
-                  const Text(
-                    'UNABLE TO CONNECT',
-                    style: TextStyle(
-                      fontFamily: 'FuturaCyrillicBook',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 2,
-                      color: Colors.black,
-                      height: 1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: _retryHealthCheck,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 14,
-                      ),
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.zero,
-                      ),
-                      side: BorderSide(
-                        color: Colors.black.withOpacity(0.6),
-                        width: 1,
-                      ),
-                      foregroundColor: Colors.black,
-                    ),
-                    child: const Text(
-                      'RETRY',
-                      style: TextStyle(
-                        fontFamily: 'FuturaCyrillicBook',
-                        fontSize: 11,
-                        letterSpacing: 2.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+  Widget _buildVideoPlayer() {
+    return Positioned.fill(
+      child: FittedBox(
+        fit: BoxFit.fitWidth,
+        child: SizedBox(
+          width: _videoController!.value.size.width,
+          height: _videoController!.value.size.height,
+          child: VideoPlayer(_videoController!),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTransitionOverlay() {
+    return Positioned.fill(
+      child: AnimatedBuilder(
+        animation: _fadeAnimation,
+        builder: (context, child) {
+          return Container(
+            color: Colors.white.withOpacity(_fadeAnimation.value),
+          );
+        },
       ),
     );
   }

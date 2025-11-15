@@ -24,7 +24,7 @@ class OutfitService {
     try {
       final response = await _apiClient.get('/outfits');
 
-      print('Outfits API response: $response');
+     
 
       // API returns: { success: true, data: { outfits: [...] } }
       final data = response['data'];

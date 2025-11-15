@@ -70,7 +70,6 @@ class _SearchScreenState extends State<SearchScreen>
 
   Future<void> _loadSearchHistory() async {
     final history = await _historyService.getSearchHistory();
-    print('Loaded search history: $history');
     if (mounted) {
       setState(() {
         _searchHistory = history;
@@ -91,7 +90,6 @@ class _SearchScreenState extends State<SearchScreen>
     if (query.isEmpty) return;
 
     // Save to search history
-    print('Saving search query: $query');
     _historyService.addSearchQuery(query);
 
     Navigator.pushReplacement(

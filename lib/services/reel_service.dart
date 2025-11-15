@@ -66,9 +66,7 @@ class ReelService {
   Future<void> incrementViews(String reelId) async {
     try {
       await _apiClient.post('/reels/$reelId/view');
-    } catch (e) {
-      print('ReelService: Failed to increment views: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> toggleLike(String reelId, {required bool like}) async {
@@ -81,7 +79,6 @@ class ReelService {
         requiresAuth: true,
       );
     } catch (e) {
-      print('ReelService: Failed to toggle like: $e');
       rethrow;
     }
   }
@@ -104,7 +101,6 @@ class ReelService {
 
       return [];
     } catch (e) {
-      print('ReelService: Failed to fetch liked reels: $e');
       throw Exception('Failed to fetch liked reels: ${e.toString()}');
     }
   }
@@ -114,7 +110,6 @@ class ReelService {
       final likedReels = await getLikedReels();
       return likedReels.map((reel) => reel.id).toSet();
     } catch (e) {
-      print('ReelService: Failed to fetch liked reel IDs: $e');
       return {};
     }
   }
