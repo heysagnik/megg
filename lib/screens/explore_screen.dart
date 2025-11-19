@@ -429,85 +429,28 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   Widget _buildFitCategories(BuildContext context) {
     final categories = [
+      {'name': 'Jacket', 'image': 'assets/category/jacket.png'},
+      {'name': 'Jeans', 'image': 'assets/category/jeans.jpg'},
+      {'name': 'Shoes', 'image': 'assets/category/shoes.png'},
+      {'name': 'Skincare', 'image': 'assets/category/skin care.png'},
+      {'name': 'Perfume', 'image': 'assets/category/perfume .png'},
+      {'name': 'Shirt', 'image': 'assets/category/shirt.png'},
+      {'name': 'Trackpants', 'image': 'assets/category/track pants.png'},
+      {'name': 'Hoodies', 'image': 'assets/category/hoodies.png'},
+      {'name': 'Sweater', 'image': 'assets/category/sweater.png'},
+      {'name': 'Sweatshirt', 'image': 'assets/category/sweatshirt.png'},
+      {'name': 'Tshirt', 'image': 'assets/category/tshirt.png'},
+
+      {'name': 'Accesories', 'image': 'assets/category/accessories.png'},
+      {'name': 'Innerwear', 'image': 'assets/category/innerwear.png'},
+
+      {'name': 'Sports Wear', 'image': 'assets/category/sports.png'},
+      {'name': 'Office Wear', 'image': 'assets/category/office .png'},
+
+      {'name': 'Traditional', 'image': 'assets/category/traditional.png'},
       {
-        'name': 'Jacket',
-        'image':
-            'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Hoodies',
-        'image':
-            'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Sweater',
-        'image':
-            'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Sweatshirt',
-        'image':
-            'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Shirt',
-        'image':
-            'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Jeans',
-        'image':
-            'https://images.unsplash.com/photo-1542272604-787c3835535d?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Trackpants',
-        'image':
-            'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Shoes',
-        'image':
-            'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Tshirt',
-        'image':
-            'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Watches',
-        'image':
-            'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Sunglasses',
-        'image':
-            'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Belts',
-        'image':
-            'https://images.unsplash.com/photo-1624222247344-5823d6eaa1c6?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Shorts',
-        'image':
-            'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Accessories',
-        'image':
-            'https://images.unsplash.com/photo-1506630448388-4e683c67ddb0?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Skincare',
-        'image':
-            'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&h=600&fit=crop',
-      },
-      {
-        'name': 'Traditional',
-        'image':
-            'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=400&h=600&fit=crop',
+        'name': 'Daily Essentials',
+        'image': 'assets/category/daily essentials .png',
       },
     ];
 
@@ -637,6 +580,10 @@ class _ExploreScreenState extends State<ExploreScreen>
             ),
           ],
         ),
+        const SizedBox(height: 4),
+        // Row 8: single box for the 17th category (index 16)
+        if (categories.length > 16)
+          _buildCategoryBox(context, categories[16], height: 160),
       ],
     );
   }
@@ -666,7 +613,7 @@ class _ExploreScreenState extends State<ExploreScreen>
           fit: StackFit.expand,
           children: [
             // Background image
-            Image.network(
+            Image.asset(
               imageUrl,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {

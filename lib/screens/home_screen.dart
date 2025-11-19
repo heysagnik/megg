@@ -300,16 +300,16 @@ class _HomeScreenState extends State<HomeScreen> {
             },
             splashRadius: 20,
           ),
-          IconButton(
-            icon: Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SearchScreen()),
-              );
-            },
-            splashRadius: 20,
-          ),
+          // IconButton(
+          //   icon: Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
+          //   onPressed: () {
+          //     Navigator.push(
+          //       context,
+          //       MaterialPageRoute(builder: (context) => const SearchScreen()),
+          //     );
+          //   },
+          //   splashRadius: 20,
+          // ),
           const SizedBox(width: 8),
         ],
       ),

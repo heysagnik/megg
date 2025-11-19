@@ -47,6 +47,8 @@ flutter:
   assets:
     - .env
     - assets/animatedlogo.mp4
+    - assets/intro.mp4
+    - assets/category/
 
   fonts:
     - family: FuturaCyrillicBook

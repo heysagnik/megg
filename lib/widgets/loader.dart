@@ -4,12 +4,14 @@ class Loader extends StatelessWidget {
   final double size;
   final bool showCaption;
   final String caption;
+  final Color color;
 
   const Loader({
     super.key,
     this.size = 22,
     this.showCaption = false,
     this.caption = 'MEGG',
+    this.color = Colors.black,
   });
 
   @override
@@ -22,18 +24,18 @@ class Loader extends StatelessWidget {
           height: size,
           child: CircularProgressIndicator(
             strokeWidth: 1.2,
-            valueColor: const AlwaysStoppedAnimation<Color>(Colors.black),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
           ),
         ),
         if (showCaption) ...[
           const SizedBox(height: 14),
           Text(
             caption,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w400,
               letterSpacing: 6,
-              color: Colors.black,
+              color: color,
             ),
           ),
         ],

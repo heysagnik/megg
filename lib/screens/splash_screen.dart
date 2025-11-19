@@ -15,19 +15,29 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
+  late AnimationController _slideController;
+  late Animation<Offset> _slideAnimation;
   VideoPlayerController? _videoController;
 
   bool _videoInitialized = false;
   bool _videoCompleted = false;
-  bool _fadeStarted = false;
+  bool _slideStarted = false;
+  bool _isAuthenticated = false;
+  bool _showSplash = true;
 
   @override
   void initState() {
     super.initState();
+    _checkAuth();
     _initializeUI();
     _initializeVideo();
+  }
+
+  void _checkAuth() {
+    final session = Supabase.instance.client.auth.currentSession;
+    setState(() {
+      _isAuthenticated = session != null;
+    });
   }
 
   void _initializeUI() {
@@ -38,18 +48,31 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 2200),
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.15, end: 1.0).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
-    );
+    _slideAnimation =
+        Tween<Offset>(begin: Offset.zero, end: const Offset(0, -1)).animate(
+          CurvedAnimation(
+            parent: _slideController,
+            curve: Curves.easeInOutCubic,
+          ),
+        );
 
-    _fadeController.addStatusListener((status) {
+    _slideController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        _navigateToNextScreen();
+        setState(() {
+          _showSplash = false;
+        });
+        // Reset system UI style for the next screen
+        SystemChrome.setSystemUIOverlayStyle(
+          const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+          ),
+        );
       }
     });
   }
@@ -90,13 +113,10 @@ class _SplashScreenState extends State<SplashScreen>
     final position = _videoController!.value.position;
     final duration = _videoController!.value.duration;
 
-    if (!_fadeStarted && position >= const Duration(milliseconds: 2000)) {
-      _fadeStarted = true;
-      _fadeController.forward();
-    }
-
-    if (duration != Duration.zero &&
-        position >= duration - const Duration(milliseconds: 80)) {
+    // Start slide slightly before video ends for smoothness
+    if (!_slideStarted &&
+        duration != Duration.zero &&
+        position >= duration - const Duration(milliseconds: 500)) {
       _onVideoComplete();
     }
   }
@@ -106,53 +126,51 @@ class _SplashScreenState extends State<SplashScreen>
 
     setState(() => _videoCompleted = true);
 
-    if (!_fadeStarted) {
-      _fadeStarted = true;
-      _fadeController.forward();
+    if (!_slideStarted) {
+      _slideStarted = true;
+      _slideController.forward();
     }
-  }
-
-  void _navigateToNextScreen() {
-    if (!mounted) return;
-
-    final isAuthenticated =
-        Supabase.instance.client.auth.currentSession != null;
-
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) =>
-            isAuthenticated ? const MainNavigation() : const WelcomeScreen(),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 100),
-      ),
-    );
   }
 
   @override
   void dispose() {
-    _fadeController.dispose();
+    _slideController.dispose();
     _videoController?.removeListener(_onVideoProgress);
     _videoController?.dispose();
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-      ),
-    );
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // If splash is done, just show the app content directly
+    if (!_showSplash) {
+      return _isAuthenticated ? const MainNavigation() : const WelcomeScreen();
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          if (_videoInitialized && _videoController != null)
-            _buildVideoPlayer(),
-          if (_fadeStarted) _buildTransitionOverlay(),
+          // The App Content (Rendered behind the splash)
+          Positioned.fill(
+            child: _isAuthenticated
+                ? const MainNavigation()
+                : const WelcomeScreen(),
+          ),
+
+          // The Splash Overlay
+          SlideTransition(
+            position: _slideAnimation,
+            child: Container(
+              color: Colors.black,
+              child: Stack(
+                children: [
+                  if (_videoInitialized && _videoController != null)
+                    _buildVideoPlayer(),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -167,19 +185,6 @@ class _SplashScreenState extends State<SplashScreen>
           height: _videoController!.value.size.height,
           child: VideoPlayer(_videoController!),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTransitionOverlay() {
-    return Positioned.fill(
-      child: AnimatedBuilder(
-        animation: _fadeAnimation,
-        builder: (context, child) {
-          return Container(
-            color: Colors.white.withOpacity(_fadeAnimation.value),
-          );
-        },
       ),
     );
   }
