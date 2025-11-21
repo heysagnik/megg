@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/product.dart';
+import '../services/product_service.dart';
 
 // ============================================================================
 // UNIVERSAL PRODUCT GRID
@@ -302,7 +303,11 @@ class _ProductCardState extends State<ProductCard>
         _stopAutoScroll();
       },
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: () {
+          // Fire and forget analytics call
+          ProductService().getProductDetails(widget.product.id);
+          widget.onTap();
+        },
         onDoubleTap: _handleDoubleTap,
         onLongPress: widget.onLongPress,
         child: Container(
@@ -432,7 +437,7 @@ class _ProductCardState extends State<ProductCard>
                                 widget.isWishlisted
                                     ? PhosphorIconsFill.heart
                                     : PhosphorIconsRegular.heart,
-                                size: 17,
+                                size: 14,
                                 color: widget.isWishlisted
                                     ? Colors.red
                                     : Colors.black.withOpacity(0.7),
@@ -479,8 +484,8 @@ class _ProductCardState extends State<ProductCard>
                           child: Transform.scale(
                             scale: _scaleAnimation.value,
                             child: Container(
-                              width: 80,
-                              height: 80,
+                              width: 64,
+                              height: 64,
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.9),
                                 shape: BoxShape.circle,
@@ -495,7 +500,7 @@ class _ProductCardState extends State<ProductCard>
                               child: Center(
                                 child: Icon(
                                   PhosphorIconsFill.heart,
-                                  size: 40,
+                                  size: 32,
                                   color: Colors.red,
                                 ),
                               ),
@@ -530,7 +535,11 @@ class _ProductCardState extends State<ProductCard>
         _stopAutoScroll();
       },
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: () {
+          // Fire and forget analytics call
+          ProductService().getProductDetails(widget.product.id);
+          widget.onTap();
+        },
         onDoubleTap: _handleDoubleTap,
         onLongPress: widget.onLongPress,
         child: Stack(
@@ -572,7 +581,7 @@ class _ProductCardState extends State<ProductCard>
                                   widget.isWishlisted
                                       ? PhosphorIconsFill.heart
                                       : PhosphorIconsRegular.heart,
-                                  size: 16,
+                                  size: 14,
                                   color: widget.isWishlisted
                                       ? Colors.red
                                       : Colors.black,
@@ -592,8 +601,8 @@ class _ProductCardState extends State<ProductCard>
                                   child: Transform.scale(
                                     scale: _scaleAnimation.value,
                                     child: Container(
-                                      width: 100,
-                                      height: 100,
+                                      width: 80,
+                                      height: 80,
                                       decoration: BoxDecoration(
                                         color: Colors.white.withOpacity(0.9),
                                         shape: BoxShape.circle,
@@ -601,7 +610,7 @@ class _ProductCardState extends State<ProductCard>
                                       child: Center(
                                         child: Icon(
                                           PhosphorIconsFill.heart,
-                                          size: 40,
+                                          size: 32,
                                           color: Colors.red,
                                         ),
                                       ),

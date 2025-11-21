@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import 'api_client.dart';
 import 'cache_service.dart';
@@ -165,6 +166,18 @@ class ProductService {
       await _apiClient.delete('/products/$productId', requiresAuth: true);
     } catch (e) {
       throw Exception('Failed to delete product: ${e.toString()}');
+    }
+  }
+  Future<void> recordProductClick(String productId) async {
+    try {
+      await _apiClient.post(
+        '/products/$productId/click',
+        body: {},
+        requiresAuth: true,
+      );
+    } catch (e) {
+      // Silently fail for analytics
+      debugPrint('Failed to record product click: $e');
     }
   }
 }

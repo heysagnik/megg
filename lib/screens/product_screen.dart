@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/product.dart';
+import '../services/product_service.dart';
+import '../services/wishlist_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
 
 class ProductScreen extends StatefulWidget {
@@ -16,16 +19,75 @@ class _ProductScreenState extends State<ProductScreen> {
   bool _isFavorite = false;
   int _currentImageIndex = 0;
   final PageController _pageController = PageController();
+  final WishlistService _wishlistService = WishlistService();
 
   @override
   void initState() {
     super.initState();
+    _checkWishlistStatus();
     _pageController.addListener(() {
       final page = _pageController.page?.round() ?? 0;
       if (_currentImageIndex != page) {
         setState(() => _currentImageIndex = page);
       }
     });
+  }
+
+  Future<void> _checkWishlistStatus() async {
+    try {
+      final isInWishlist = await _wishlistService.isInWishlist(widget.product.id);
+      if (mounted) {
+        setState(() => _isFavorite = isInWishlist);
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  Future<void> _toggleWishlist() async {
+    final wasFavorite = _isFavorite;
+    setState(() => _isFavorite = !wasFavorite);
+
+    try {
+      if (wasFavorite) {
+        await _wishlistService.removeFromWishlist(widget.product.id);
+      } else {
+        await _wishlistService.addToWishlist(widget.product.id);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              wasFavorite ? 'Removed from Wishlist' : 'Added to Wishlist',
+              style: const TextStyle(letterSpacing: 0.5),
+            ),
+            backgroundColor: Colors.black,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 1),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() => _isFavorite = wasFavorite);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              wasFavorite
+                  ? 'Failed to remove from wishlist'
+                  : 'Failed to add to wishlist',
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -50,13 +112,19 @@ class _ProductScreenState extends State<ProductScreen> {
               size: 20,
             ),
             color: _isFavorite ? Colors.red : Colors.black,
-            onPressed: () => setState(() => _isFavorite = !_isFavorite),
+            onPressed: _toggleWishlist,
             splashRadius: 20,
           ),
           IconButton(
             icon: const Icon(PhosphorIconsRegular.shareNetwork, size: 20),
             color: Colors.black,
-            onPressed: () {},
+            onPressed: () async {
+              final text = 'Check out ${widget.product.name} on MEGG!\n${widget.product.affiliateLink}';
+              final url = 'https://wa.me/?text=${Uri.encodeComponent(text)}';
+              if (await canLaunchUrl(Uri.parse(url))) {
+                await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+              }
+            },
             splashRadius: 20,
           ),
           const SizedBox(width: 8),
@@ -346,25 +414,31 @@ class _ProductScreenState extends State<ProductScreen> {
         child: SizedBox(
           height: 54,
           child: ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text(
-                    'ADDED TO BAG',
-                    style: TextStyle(
-                      letterSpacing: 1.5,
-                      fontWeight: FontWeight.w500,
+            onPressed: () async {
+              // 1. Record the click
+              await ProductService().recordProductClick(widget.product.id);
+
+              // 2. Open the affiliate link
+              final url = Uri.parse(widget.product.affiliateLink);
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              } else {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text(
+                        'Could not open link',
+                        style: TextStyle(letterSpacing: 0.5),
+                      ),
+                      backgroundColor: Colors.black,
+                      behavior: SnackBarBehavior.floating,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
                     ),
-                  ),
-                  backgroundColor: Colors.black,
-                  behavior: SnackBarBehavior.floating,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  margin: const EdgeInsets.all(16),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
+                  );
+                }
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.black,
@@ -377,14 +451,26 @@ class _ProductScreenState extends State<ProductScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(PhosphorIconsRegular.shoppingBag, size: 18),
+                Image.asset(
+                  'assets/myntra.png',
+                  height: 24,
+                  width: 24,
+                  color: Colors.white, // Ensure logo is white on black button
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      PhosphorIconsBold.shoppingBag,
+                      color: Colors.white,
+                      size: 20,
+                    );
+                  },
+                ),
                 const SizedBox(width: 12),
                 const Text(
-                  'ADD TO BAG',
+                  'BUY NOW ON MYNTRA',
                   style: TextStyle(
                     letterSpacing: 2.0,
                     fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
