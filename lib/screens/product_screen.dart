@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/product.dart';
-import '../widgets/custom_icons.dart';
-import 'outfit_creator_screen.dart';
+import '../widgets/aesthetic_app_bar.dart';
 
 class ProductScreen extends StatefulWidget {
   final Product product;
@@ -13,31 +13,71 @@ class ProductScreen extends StatefulWidget {
 }
 
 class _ProductScreenState extends State<ProductScreen> {
-  String? _selectedSize;
-  String? _selectedColor;
   bool _isFavorite = false;
+  int _currentImageIndex = 0;
+  final PageController _pageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController.addListener(() {
+      final page = _pageController.page?.round() ?? 0;
+      if (_currentImageIndex != page) {
+        setState(() => _currentImageIndex = page);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(),
-          SliverToBoxAdapter(
+      appBar: AestheticAppBar(
+        title: '',
+        showBackButton: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              _isFavorite
+                  ? PhosphorIconsFill.heart
+                  : PhosphorIconsRegular.heart,
+              size: 20,
+            ),
+            color: _isFavorite ? Colors.red : Colors.black,
+            onPressed: () => setState(() => _isFavorite = !_isFavorite),
+            splashRadius: 20,
+          ),
+          IconButton(
+            icon: const Icon(PhosphorIconsRegular.shareNetwork, size: 20),
+            color: Colors.black,
+            onPressed: () {},
+            splashRadius: 20,
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildProductImages(),
+                const SizedBox(height: 32),
+                _buildProductHeader(),
                 const SizedBox(height: 24),
-                _buildProductInfo(),
-                const SizedBox(height: 24),
-                _buildColorSelector(),
-                const SizedBox(height: 24),
-                _buildSizeSelector(),
-                const SizedBox(height: 24),
+                _buildColorDisplay(),
+                const SizedBox(height: 40),
+                _buildProductDetails(),
+                const SizedBox(height: 32),
                 _buildDescription(),
-                const SizedBox(height: 80),
+                const SizedBox(height: 120),
               ],
             ),
           ),
@@ -47,274 +87,235 @@ class _ProductScreenState extends State<ProductScreen> {
     );
   }
 
-  Widget _buildAppBar() {
-    return SliverAppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      pinned: true,
-      surfaceTintColor: Colors.transparent,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, size: 18),
-        color: Colors.black,
-        onPressed: () => Navigator.pop(context),
-        splashRadius: 20,
-      ),
-      actions: [
-        IconButton(
-          icon: CustomIcons.heart(
-            size: 20,
-            color: Colors.black,
-            filled: _isFavorite,
+  Widget _buildProductImages() {
+    return Column(
+      children: [
+        SizedBox(
+          height: 550,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.product.images.length,
+            itemBuilder: (context, index) {
+              return Container(
+                color: const Color(0xFFF8F8F8),
+                child: Image.network(
+                  widget.product.images[index],
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                            : null,
+                        strokeWidth: 1.2,
+                        color: Colors.black,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Center(
+                      child: Icon(
+                        PhosphorIconsRegular.image,
+                        size: 64,
+                        color: Colors.grey[300],
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
           ),
-          onPressed: () {
-            setState(() {
-              _isFavorite = !_isFavorite;
-            });
-          },
-          splashRadius: 20,
         ),
-        IconButton(
-          icon: const Icon(Icons.share_outlined, size: 20),
-          color: Colors.black,
-          onPressed: () {},
-          splashRadius: 20,
-        ),
-        const SizedBox(width: 4),
+        if (widget.product.images.length > 1) ...[
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(
+              widget.product.images.length,
+              (index) => AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: _currentImageIndex == index ? 20 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: _currentImageIndex == index
+                      ? Colors.black
+                      : Colors.black.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildProductImages() {
-    return SizedBox(
-      height: 550,
-      child: PageView.builder(
-        itemCount: widget.product.images.length,
-        itemBuilder: (context, index) {
-          return Container(
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              image: DecorationImage(
-                image: NetworkImage(widget.product.images[index]),
-                fit: BoxFit.cover,
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildProductInfo() {
+  Widget _buildProductHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            widget.product.category.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 1.5,
+              color: Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 8),
           Text(
             widget.product.name,
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w400,
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            widget.product.category.toUpperCase(),
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              letterSpacing: 1.5,
+              letterSpacing: 0.5,
+              height: 1.3,
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            '\$${widget.product.price.toStringAsFixed(2)}',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColorSelector() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'COLOR',
-            style: TextStyle(
-              fontSize: 13,
+            'Rs ${widget.product.price.toStringAsFixed(2)}',
+            style: const TextStyle(
+              fontSize: 18,
               fontWeight: FontWeight.w500,
-              letterSpacing: 1.5,
+              letterSpacing: 0.5,
             ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            children: widget.product.colors.map((color) {
-              final isSelected = _selectedColor == color;
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedColor = color;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.black : Colors.white,
-                    border: Border.all(color: Colors.black, width: 1),
-                  ),
-                  child: Text(
-                    color.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      letterSpacing: 1,
-                      color: isSelected ? Colors.white : Colors.black,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSizeSelector() {
+  Widget _buildColorDisplay() {
+    if (widget.product.color.isEmpty) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(height: 1, color: Colors.black.withOpacity(0.08)),
+          const SizedBox(height: 20),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'SIZE',
+              Text(
+                'COLOR',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 11,
                   fontWeight: FontWeight.w500,
                   letterSpacing: 1.5,
+                  color: Colors.grey[600],
                 ),
               ),
-              TextButton(
-                onPressed: () {},
-                child: const Text(
-                  'SIZE GUIDE',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 11,
-                    letterSpacing: 1,
-                    decoration: TextDecoration.underline,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  widget.product.color,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: widget.product.sizes.map((size) {
-              final isSelected = _selectedSize == size;
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedSize = size;
-                  });
-                },
-                child: Container(
-                  width: 60,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.black : Colors.white,
-                    border: Border.all(color: Colors.black, width: 1),
-                  ),
-                  child: Center(
-                    child: Text(
-                      size,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isSelected ? Colors.white : Colors.black,
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+          const SizedBox(height: 20),
+          Container(height: 1, color: Colors.black.withOpacity(0.08)),
         ],
       ),
+    );
+  }
+
+  Widget _buildProductDetails() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+      decoration: BoxDecoration(color: Colors.grey[50]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'PRODUCT DETAILS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 1.5,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildDetailRow('Category', widget.product.category),
+          if (widget.product.subcategory != null &&
+              widget.product.subcategory!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildDetailRow('Subcategory', widget.product.subcategory!),
+          ],
+          const SizedBox(height: 12),
+          _buildDetailRow('Color', widget.product.color),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0.3,
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildDescription() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'DESCRIPTION',
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 11,
               fontWeight: FontWeight.w500,
               letterSpacing: 1.5,
+              color: Colors.grey[600],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Text(
             widget.product.description,
             style: TextStyle(
               fontSize: 14,
-              height: 1.6,
+              height: 1.7,
               color: Colors.grey[800],
               letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _buildDetailItem('Composition', '100% Cotton'),
-          _buildDetailItem('Care', 'Machine wash at 30°C'),
-          _buildDetailItem('Origin', 'Made in Portugal'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[700],
-                letterSpacing: 0.3,
-              ),
             ),
           ),
         ],
@@ -324,97 +325,71 @@ class _ProductScreenState extends State<ProductScreen> {
 
   Widget _buildBottomBar() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        16,
+        20,
+        MediaQuery.of(context).padding.bottom + 16,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
             offset: const Offset(0, -2),
           ),
         ],
       ),
       child: SafeArea(
-        child: Row(
-          children: [
-            // ADD TO OUTFIT button
-            Expanded(
-              flex: 1,
-              child: SizedBox(
-                height: 54,
-                child: OutlinedButton(
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            OutfitCreatorScreen(baseProduct: widget.product),
-                      ),
-                    );
-                    // Handle return from outfit creator if needed
-                    if (result != null && mounted) {
-                      // You can show a snackbar or update state here
-                    }
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.black,
-                    side: const BorderSide(color: Colors.black, width: 1.5),
-                    elevation: 0,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                  child: const Text(
-                    'ADD TO OUTFIT',
+        top: false,
+        child: SizedBox(
+          height: 54,
+          child: ElevatedButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    'ADDED TO BAG',
                     style: TextStyle(
                       letterSpacing: 1.5,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
+                  backgroundColor: Colors.black,
+                  behavior: SnackBarBehavior.floating,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.zero,
+                  ),
+                  margin: const EdgeInsets.all(16),
+                  duration: const Duration(seconds: 2),
                 ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.zero,
               ),
             ),
-            const SizedBox(width: 12),
-            // ADD TO BAG button
-            Expanded(
-              flex: 1,
-              child: SizedBox(
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _selectedSize != null && _selectedColor != null
-                      ? () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Added to bag'),
-                              backgroundColor: Colors.black,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey[300],
-                    elevation: 0,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                  child: const Text(
-                    'ADD TO BAG',
-                    style: TextStyle(
-                      letterSpacing: 1.5,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(PhosphorIconsRegular.shoppingBag, size: 18),
+                const SizedBox(width: 12),
+                const Text(
+                  'ADD TO BAG',
+                  style: TextStyle(
+                    letterSpacing: 2.0,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

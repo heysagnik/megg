@@ -7,61 +7,19 @@ class GuidesScreen extends StatelessWidget {
   const GuidesScreen({super.key});
 
   static final List<Map<String, dynamic>> _guideCategories = [
-    {
-      'name': 'Office fit',
-      'icon': PhosphorIconsRegular.briefcase,
-      'color': const Color(0xFF1a1a1a),
-    },
-    {
-      'name': 'Layering outfit',
-      'icon': PhosphorIconsRegular.stack,
-      'color': const Color(0xFF2c2c2c),
-    },
-    {
-      'name': 'Winter fit',
-      'icon': PhosphorIconsRegular.snowflake,
-      'color': const Color(0xFF3d5a80),
-    },
-    {
-      'name': 'Festive fit',
-      'icon': PhosphorIconsRegular.confetti,
-      'color': const Color(0xFFc1121f),
-    },
-    {
-      'name': 'Travel fit',
-      'icon': PhosphorIconsRegular.airplaneTilt,
-      'color': const Color(0xFF06a77d),
-    },
+    {'name': 'Office fit', 'image': 'assets/guides/formal.jpg'},
+    {'name': 'Layering outfit', 'image': 'assets/guides/layering fit.jpg'},
+    {'name': 'Winter fit', 'image': 'assets/guides/winter.jpg'},
+    {'name': 'Wedding fit', 'image': 'assets/guides/festive.jpg'},
+    {'name': 'Travel fit', 'image': 'assets/guides/date.jpg'},
     {
       'name': 'Personality development',
-      'icon': PhosphorIconsRegular.user,
-      'color': const Color(0xFF6a4c93),
+      'image': 'assets/guides/personality dev.jpg',
     },
-    {
-      'name': 'Date fit',
-      'icon': PhosphorIconsRegular.heart,
-      'color': const Color(0xFFe63946),
-    },
-    {
-      'name': 'Colour combo',
-      'icon': PhosphorIconsRegular.palette,
-      'color': const Color(0xFFf77f00),
-    },
-    {
-      'name': 'College fit',
-      'icon': PhosphorIconsRegular.graduationCap,
-      'color': const Color(0xFF457b9d),
-    },
-    {
-      'name': 'Party fit',
-      'icon': PhosphorIconsRegular.sparkle,
-      'color': const Color(0xFFd62828),
-    },
-    {
-      'name': 'Airport look',
-      'icon': PhosphorIconsRegular.airplane,
-      'color': const Color(0xFF003049),
-    },
+    {'name': 'Date fit', 'image': 'assets/guides/date.jpg'},
+    {'name': 'Colour combo', 'image': 'assets/guides/color combo.jpg'},
+    {'name': 'College fit', 'image': 'assets/guides/college.jpg'},
+    {'name': 'Party fit', 'image': 'assets/guides/party fit.jpg'},
   ];
 
   @override
@@ -69,35 +27,31 @@ class GuidesScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: const AestheticAppBar(title: 'GUIDES'),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.75,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: _guideCategories.length,
-          itemBuilder: (context, index) {
-            final category = _guideCategories[index];
-            return _GuideCard(
-              name: category['name'] as String,
-              icon: category['icon'] as IconData,
-              color: category['color'] as Color,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CategoryReelsScreen(
-                      category: category['name'] as String,
-                    ),
-                  ),
-                );
-              },
-            );
-          },
+      body: GridView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.7,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
         ),
+        itemCount: _guideCategories.length,
+        itemBuilder: (context, index) {
+          final category = _guideCategories[index];
+          return _GuideCard(
+            name: category['name'] as String,
+            imagePath: category['image'] as String,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      CategoryReelsScreen(category: category['name'] as String),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -105,14 +59,12 @@ class GuidesScreen extends StatelessWidget {
 
 class _GuideCard extends StatelessWidget {
   final String name;
-  final IconData icon;
-  final Color color;
+  final String imagePath;
   final VoidCallback onTap;
 
   const _GuideCard({
     required this.name,
-    required this.icon,
-    required this.color,
+    required this.imagePath,
     required this.onTap,
   });
 
@@ -122,62 +74,86 @@ class _GuideCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [color, color.withOpacity(0.7)],
-          ),
-          borderRadius: BorderRadius.circular(2),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: ClipRRect(
+          //borderRadius: BorderRadius.circular(5),
+          child: Stack(
+            fit: StackFit.expand,
             children: [
+              Image.asset(imagePath, fit: BoxFit.cover),
+              // Gradient Overlay
               Container(
-                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.2),
+                      Colors.black.withOpacity(0.7),
+                    ],
+                    stops: const [0.4, 0.7, 1.0],
+                  ),
                 ),
-                child: Icon(icon, color: Colors.white, size: 32),
               ),
-              const Spacer(),
-              Text(
-                name.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1.5,
-                  height: 1.3,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      PhosphorIconsRegular.play,
-                      color: Colors.white,
-                      size: 12,
-                    ),
-                    const SizedBox(width: 4),
                     Text(
-                      'WATCH',
-                      style: TextStyle(
+                      name.toUpperCase(),
+                      style: const TextStyle(
+                        fontFamily: 'FuturaCyrillicBook',
                         color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                        height: 1.1,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.35),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            PhosphorIconsFill.play,
+                            color: Colors.white.withOpacity(0.85),
+                            size: 10,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'WATCH',
+                            style: TextStyle(
+                              fontFamily: 'FuturaCyrillicBook',
+                              color: Colors.white.withOpacity(0.85),
+                              fontSize: 8,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

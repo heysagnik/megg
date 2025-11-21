@@ -9,7 +9,7 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase => Supabase.instance.client;
   RealtimeChannel? _channel;
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   bool _notificationsEnabled = true;

@@ -3,6 +3,13 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import '../config/api_config.dart';
+import '../services/auth_service.dart';
+import '../services/cache_service.dart';
+import '../services/fcm_service.dart';
+import '../services/notification_service.dart';
 import 'welcome_screen.dart';
 import 'main_navigation.dart';
 
@@ -18,26 +25,65 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
   VideoPlayerController? _videoController;
+  Timer? _safetyTimer;
 
   bool _videoInitialized = false;
   bool _videoCompleted = false;
   bool _slideStarted = false;
   bool _isAuthenticated = false;
   bool _showSplash = true;
+  bool _appInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _checkAuth();
     _initializeUI();
+    _initApp();
     _initializeVideo();
+  }
+
+  Future<void> _initApp() async {
+    try {
+      await CacheService().init();
+
+      try {
+        await dotenv.load(fileName: '.env');
+      } catch (e) {
+        debugPrint('Failed to load .env: $e');
+      }
+
+      await Firebase.initializeApp();
+
+      await Supabase.initialize(
+        url: ApiConfig.supabaseUrl,
+        anonKey: ApiConfig.supabaseAnonKey,
+      );
+
+      AuthService().setupAuthListener();
+      await FCMService().initialize();
+      await NotificationService().initialize();
+
+      if (mounted) {
+        _checkAuth();
+        setState(() => _appInitialized = true);
+        _tryNavigate();
+      }
+    } catch (e) {
+      debugPrint('App initialization failed: $e');
+      if (mounted) {
+        setState(() => _appInitialized = true);
+        _tryNavigate();
+      }
+    }
   }
 
   void _checkAuth() {
     final session = Supabase.instance.client.auth.currentSession;
-    setState(() {
-      _isAuthenticated = session != null;
-    });
+    if (mounted) {
+      setState(() {
+        _isAuthenticated = session != null;
+      });
+    }
   }
 
   void _initializeUI() {
@@ -63,9 +109,11 @@ class _SplashScreenState extends State<SplashScreen>
 
     _slideController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        setState(() {
-          _showSplash = false;
-        });
+        if (mounted) {
+          setState(() {
+            _showSplash = false;
+          });
+        }
         // Reset system UI style for the next screen
         SystemChrome.setSystemUIOverlayStyle(
           const SystemUiOverlayStyle(
@@ -82,14 +130,18 @@ class _SplashScreenState extends State<SplashScreen>
 
     try {
       await _videoController!.initialize();
+      if (!mounted) return;
+
       await _videoController!.setVolume(0.0);
       await _videoController!.setLooping(false);
       _videoController!.addListener(_onVideoProgress);
 
       final duration = _videoController!.value.duration;
       if (duration != Duration.zero) {
-        Timer(duration + const Duration(milliseconds: 100), () {
-          if (!_videoCompleted) _onVideoComplete();
+        // Use a safety timer that is longer than the video duration
+        // to prevent getting stuck if the video player fails to report progress
+        _safetyTimer = Timer(duration + const Duration(seconds: 2), () {
+          if (mounted && !_videoCompleted) _onVideoComplete();
         });
       }
 
@@ -108,25 +160,33 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _onVideoProgress() {
-    if (_videoCompleted || _videoController == null) return;
+    if (!mounted ||
+        _videoCompleted ||
+        _videoController == null ||
+        !_videoController!.value.isInitialized)
+      return;
 
     final position = _videoController!.value.position;
     final duration = _videoController!.value.duration;
 
     // Start slide slightly before video ends for smoothness
+    // Reduced buffer to 200ms to ensure video plays mostly to the end
     if (!_slideStarted &&
         duration != Duration.zero &&
-        position >= duration - const Duration(milliseconds: 500)) {
+        position >= duration - const Duration(milliseconds: 200)) {
       _onVideoComplete();
     }
   }
 
   void _onVideoComplete() {
-    if (_videoCompleted) return;
+    if (!mounted || _videoCompleted) return;
 
     setState(() => _videoCompleted = true);
+    _tryNavigate();
+  }
 
-    if (!_slideStarted) {
+  void _tryNavigate() {
+    if (_videoCompleted && _appInitialized && !_slideStarted) {
       _slideStarted = true;
       _slideController.forward();
     }
@@ -134,6 +194,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
+    _safetyTimer?.cancel();
     _slideController.dispose();
     _videoController?.removeListener(_onVideoProgress);
     _videoController?.dispose();
@@ -152,22 +213,31 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         children: [
           // The App Content (Rendered behind the splash)
-          Positioned.fill(
-            child: _isAuthenticated
-                ? const MainNavigation()
-                : const WelcomeScreen(),
-          ),
+          if (_appInitialized)
+            Positioned.fill(
+              child: _isAuthenticated
+                  ? const MainNavigation()
+                  : const WelcomeScreen(),
+            ),
 
           // The Splash Overlay
           SlideTransition(
             position: _slideAnimation,
-            child: Container(
-              color: Colors.black,
-              child: Stack(
-                children: [
-                  if (_videoInitialized && _videoController != null)
-                    _buildVideoPlayer(),
-                ],
+            child: GestureDetector(
+              onVerticalDragEnd: (details) {
+                // Detect swipe up to dismiss
+                if (details.primaryVelocity! < -500) {
+                  _onVideoComplete();
+                }
+              },
+              child: Container(
+                color: Colors.black,
+                child: Stack(
+                  children: [
+                    if (_videoInitialized && _videoController != null)
+                      _buildVideoPlayer(),
+                  ],
+                ),
               ),
             ),
           ),

@@ -8,6 +8,7 @@ import '../services/wishlist_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../widgets/filter_sort_bar.dart';
 import '../widgets/product_widget.dart';
+import '../widgets/custom_refresh_indicator.dart';
 import 'product_screen.dart';
 import 'search_screen.dart';
 import '../widgets/loader.dart';
@@ -140,7 +141,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
       // Colors from products
       final colors = <String>{};
       for (final p in result.products) {
-        if (p.colors.isNotEmpty) colors.addAll(p.colors);
+        if (p.color.isNotEmpty) colors.add(p.color);
       }
 
       setState(() {
@@ -224,8 +225,9 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
       return _buildErrorState();
     }
 
-    return RefreshIndicator(
+    return CustomRefreshIndicator(
       onRefresh: () => _fetch(page: 1),
+      color: Colors.black,
       child: NotificationListener<ScrollNotification>(
         onNotification: _handleScrollNotification,
         child: ListView(

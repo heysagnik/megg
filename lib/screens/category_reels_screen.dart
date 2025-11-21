@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/reel.dart';
 import '../services/reel_service.dart';
 import '../services/auth_service.dart';
@@ -29,7 +31,7 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
   final Set<String> _likedReels = {};
   final Map<String, int> _likeCounts = {}; // Track real-time like counts
   int _currentPageIndex = 0;
-  final Map<int, GlobalKey<_ReelItemState>> _reelKeys = {};
+  // Removed _reelKeys as we'll use didUpdateWidget for playback control
 
   @override
   void initState() {
@@ -43,16 +45,6 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    // Pause video when app goes to background
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      _reelKeys[_currentPageIndex]?.currentState?.pauseVideo();
-    }
   }
 
   Future<void> _loadReels() async {
@@ -202,6 +194,30 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
     }
   }
 
+  Future<void> _shareReel(Reel reel) async {
+    try {
+      const String playStoreLink =
+          'https://play.google.com/store/apps/details?id=com.megg.megg';
+      final String categoryName = widget.category;
+      final String affiliateLink = reel.affiliateLink ?? '';
+
+      final String shareText =
+          'Browse the $categoryName from here $affiliateLink. '
+          'For more download this app from play store. $playStoreLink';
+
+      await Share.share(shareText);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Share failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -255,35 +271,27 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
     return PageView.builder(
       controller: _pageController,
       scrollDirection: Axis.vertical,
-      itemCount: _reels.length,
-      onPageChanged: (index) {
-        // Pause previous video
-        _reelKeys[_currentPageIndex]?.currentState?.pauseVideo();
-
-        // Update current index and track view
-        setState(() => _currentPageIndex = index);
-        _trackView(_reels[index].id);
-
-        // Play new video
-        Future.delayed(const Duration(milliseconds: 100), () {
-          _reelKeys[index]?.currentState?.playVideo();
-        });
-      },
+      physics: const ClampingScrollPhysics(),
       itemBuilder: (context, index) {
-        final reel = _reels[index];
-        if (!_reelKeys.containsKey(index)) {
-          _reelKeys[index] = GlobalKey<_ReelItemState>();
-        }
+        final reelIndex = index % _reels.length;
+        final reel = _reels[reelIndex];
 
         return _ReelItem(
-          key: _reelKeys[index],
           reel: reel,
           isLiked: _likedReels.contains(reel.id),
           likeCount: _likeCounts[reel.id] ?? reel.likes,
           onLike: () => _toggleLike(reel.id),
           onShopTap: () => _openLink(reel.affiliateLink),
-          isCurrentPage: index == _currentPageIndex,
+          onShareTap: () => _shareReel(reel),
+          isCurrentPage: reelIndex == _currentPageIndex,
         );
+      },
+      onPageChanged: (index) {
+        final newIndex = index % _reels.length;
+
+        // Update current index and track view
+        setState(() => _currentPageIndex = newIndex);
+        _trackView(_reels[newIndex].id);
       },
     );
   }
@@ -390,6 +398,7 @@ class _ReelItem extends StatefulWidget {
   final int likeCount;
   final VoidCallback onLike;
   final VoidCallback onShopTap;
+  final VoidCallback onShareTap;
   final bool isCurrentPage;
 
   const _ReelItem({
@@ -399,6 +408,7 @@ class _ReelItem extends StatefulWidget {
     required this.likeCount,
     required this.onLike,
     required this.onShopTap,
+    required this.onShareTap,
     required this.isCurrentPage,
   });
 
@@ -413,11 +423,30 @@ class _ReelItemState extends State<_ReelItem>
   bool _hasError = false;
   double _swipeOffset = 0;
   bool _showLikeAnimation = false;
+  Size? _cachedVideoSize;
 
   @override
   void initState() {
     super.initState();
     _initializeVideo();
+  }
+
+  @override
+  void didUpdateWidget(_ReelItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reel.videoUrl != oldWidget.reel.videoUrl) {
+      _controller?.dispose();
+      _controller = null;
+      _isInitialized = false;
+      _cachedVideoSize = null;
+      _initializeVideo();
+    } else if (widget.isCurrentPage != oldWidget.isCurrentPage) {
+      if (widget.isCurrentPage) {
+        playVideo();
+      } else {
+        pauseVideo();
+      }
+    }
   }
 
   @override
@@ -427,6 +456,11 @@ class _ReelItemState extends State<_ReelItem>
   }
 
   Future<void> _initializeVideo() async {
+    if (!widget.isCurrentPage) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!mounted || widget.isCurrentPage) return;
+    }
+
     try {
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.reel.videoUrl),
@@ -436,8 +470,10 @@ class _ReelItemState extends State<_ReelItem>
 
       if (!mounted) return;
 
+      final videoSize = _controller!.value.size;
       setState(() {
         _isInitialized = true;
+        _cachedVideoSize = videoSize;
       });
 
       _controller!.setLooping(true);
@@ -496,6 +532,16 @@ class _ReelItemState extends State<_ReelItem>
     }
   }
 
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    }
+    if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}k';
+    }
+    return count.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -524,15 +570,41 @@ class _ReelItemState extends State<_ReelItem>
           // Video or thumbnail
           if (_hasError)
             _buildErrorView()
-          else if (_isInitialized && _controller != null)
-            Center(
-              child: AspectRatio(
-                aspectRatio: _controller!.value.aspectRatio,
-                child: VideoPlayer(_controller!),
+          else if (_isInitialized &&
+              _controller != null &&
+              _cachedVideoSize != null)
+            RepaintBoundary(
+              child: SizedBox.expand(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _cachedVideoSize!.width,
+                    height: _cachedVideoSize!.height,
+                    child: VideoPlayer(_controller!),
+                  ),
+                ),
               ),
             )
           else
             _buildLoadingView(),
+
+          // Gradient Overlay for better text visibility
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 250,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                  stops: const [0.0, 1.0],
+                ),
+              ),
+            ),
+          ),
 
           // Play/Pause indicator
           if (_isInitialized &&
@@ -540,13 +612,13 @@ class _ReelItemState extends State<_ReelItem>
               !_controller!.value.isPlaying)
             Center(
               child: Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withOpacity(0.3),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  PhosphorIconsRegular.play,
+                  PhosphorIconsFill.play,
                   color: Colors.white,
                   size: 48,
                 ),
@@ -575,77 +647,120 @@ class _ReelItemState extends State<_ReelItem>
               ),
             ),
 
-          // Action buttons
+          // Action buttons (Right Side)
           Positioned(
             right: 16,
-            bottom: 120,
+            bottom: 100,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 _ActionButton(
                   icon: widget.isLiked
                       ? PhosphorIconsFill.heart
                       : PhosphorIconsRegular.heart,
-                  label: widget.likeCount.toString(),
+                  label: _formatCount(widget.likeCount),
                   onTap: widget.onLike,
-                  color: widget.isLiked ? Colors.red : Colors.white,
+                  color: widget.isLiked
+                      ? const Color(0xFFFF3040)
+                      : Colors.white,
                 ),
+                const SizedBox(height: 20),
                 if (widget.reel.affiliateLink != null &&
                     widget.reel.affiliateLink!.isNotEmpty) ...[
-                  const SizedBox(height: 24),
                   _ActionButton(
-                    icon: PhosphorIconsRegular.shoppingBag,
-                    label: null,
+                    icon: PhosphorIconsRegular.bag,
+                    label: 'Shop',
                     onTap: widget.onShopTap,
                     color: Colors.white,
                   ),
+                  const SizedBox(height: 20),
                 ],
+                _ActionButton(
+                  icon: PhosphorIconsRegular.shareFat,
+                  label: 'Share',
+                  onTap: widget.onShareTap,
+                  color: Colors.white,
+                ),
               ],
             ),
           ),
 
-          // Bottom info section
+          // Bottom info section (Left Side)
           Positioned(
             left: 16,
-            right: 80,
-            bottom: 100,
+            right: 100,
+            bottom: 40,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Views Count
                 Row(
                   children: [
-                    Icon(
+                    const Icon(
                       PhosphorIconsRegular.eye,
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white,
                       size: 16,
+                      shadows: [Shadow(color: Colors.black45, blurRadius: 2)],
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '${widget.reel.views} views',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: 0.5,
+                      '${_formatCount(widget.reel.views)} views',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        shadows: [Shadow(color: Colors.black45, blurRadius: 2)],
                       ),
                     ),
                   ],
                 ),
+
+                // Shop CTA
                 if (widget.reel.affiliateLink != null &&
                     widget.reel.affiliateLink!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text(
-                        'SWIPE LEFT FOR PRODUCTS',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w400,
-                          letterSpacing: 1.2,
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: widget.onShopTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1,
                         ),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Text(
+                            'Shop this look',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              shadows: [
+                                Shadow(color: Colors.black45, blurRadius: 2),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                          Icon(
+                            PhosphorIconsRegular.arrowRight,
+                            color: Colors.white,
+                            size: 14,
+                            shadows: [
+                              Shadow(color: Colors.black45, blurRadius: 2),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -665,7 +780,7 @@ class _ReelItemState extends State<_ReelItem>
           if (widget.reel.thumbnailUrl.isNotEmpty)
             Image.network(
               widget.reel.thumbnailUrl,
-              fit: BoxFit.contain,
+              fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
                 return Center(
                   child: Icon(
@@ -730,22 +845,45 @@ class _ActionButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            // Removed background circle, added shadow for visibility
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: Icon(icon, color: color, size: 28),
+            child: Icon(
+              icon,
+              color: color,
+              size: 32, // Increased size slightly
+              shadows: [
+                Shadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
           ),
           if (label != null) ...[
             const SizedBox(height: 4),
             Text(
               label!,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.5,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                shadows: [
+                  Shadow(
+                    color: Colors.black54,
+                    blurRadius: 2,
+                    offset: Offset(0, 1),
+                  ),
+                ],
               ),
             ),
           ],

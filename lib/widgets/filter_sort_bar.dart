@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 class FilterSortBar extends StatelessWidget {
   final String sortBy;
@@ -52,7 +53,7 @@ class FilterSortBar extends StatelessWidget {
               Expanded(
                 child: _buildButton(
                   context,
-                  icon: Icons.swap_vert,
+                  icon: PhosphorIconsRegular.arrowsDownUp,
                   label: 'SORT',
                   onTap: onSortTap,
                 ),
@@ -65,7 +66,7 @@ class FilterSortBar extends StatelessWidget {
               Expanded(
                 child: _buildButton(
                   context,
-                  icon: Icons.tune,
+                  icon: PhosphorIconsRegular.sliders,
                   label: 'FILTER',
                   onTap: onFilterTap,
                   badge: activeFilterCount != null && activeFilterCount! > 0
@@ -82,8 +83,8 @@ class FilterSortBar extends StatelessWidget {
                 child: _buildButton(
                   context,
                   icon: isGridView
-                      ? Icons.view_agenda_outlined
-                      : Icons.grid_view_outlined,
+                      ? PhosphorIconsRegular.list
+                      : PhosphorIconsRegular.gridFour,
                   label: isGridView ? 'LIST' : 'GRID',
                   onTap: onViewToggle,
                 ),
@@ -97,7 +98,7 @@ class FilterSortBar extends StatelessWidget {
 
   Widget _buildButton(
     BuildContext context, {
-    required IconData icon,
+    required dynamic icon,
     required String label,
     required VoidCallback onTap,
     int? badge,

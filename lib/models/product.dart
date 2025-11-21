@@ -1,37 +1,48 @@
 class Product {
   final String id;
   final String name;
-  final String category;
-  final double price;
-  final List<String> images;
   final String description;
-  final List<String> sizes;
-  final List<String> colors;
+  final double price;
+  final String brand;
+  final List<String> images;
+  final String category;
+  final String? subcategory;
+  final String color;
+  final List<String> suggestedColors;
+  final String affiliateLink;
 
   Product({
     required this.id,
     required this.name,
-    required this.category,
-    required this.price,
-    required this.images,
     required this.description,
-    required this.sizes,
-    required this.colors,
+    required this.price,
+    required this.brand,
+    required this.images,
+    required this.category,
+    this.subcategory,
+    required this.color,
+    this.suggestedColors = const [],
+    required this.affiliateLink,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id']?.toString() ?? '',
       name: json['name'] ?? '',
-      category: json['category'] ?? '',
+      description: json['description'] ?? '',
       price: (json['price'] is num) ? (json['price'] as num).toDouble() : 0.0,
+      brand: json['brand'] ?? '',
       images:
           (json['images'] as List?)?.map((e) => e.toString()).toList() ?? [],
-      description: json['description'] ?? '',
-      sizes: (json['sizes'] as List?)?.map((e) => e.toString()).toList() ?? [],
-      colors: json['color'] != null
-          ? [json['color'].toString()]
-          : (json['colors'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      category: json['category'] ?? '',
+      subcategory: json['subcategory']?.toString(),
+      color: json['color']?.toString() ?? '',
+      suggestedColors:
+          (json['suggested_colors'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
+      affiliateLink: json['affiliate_link']?.toString() ?? '',
     );
   }
 
@@ -39,12 +50,15 @@ class Product {
     return {
       'id': id,
       'name': name,
-      'category': category,
-      'price': price,
-      'images': images,
       'description': description,
-      'sizes': sizes,
-      'colors': colors,
+      'price': price,
+      'brand': brand,
+      'images': images,
+      'category': category,
+      'subcategory': subcategory,
+      'color': color,
+      'suggested_colors': suggestedColors,
+      'affiliate_link': affiliateLink,
     };
   }
 }

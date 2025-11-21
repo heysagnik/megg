@@ -3,43 +3,31 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Top-level function for background message handling
-/// Required by FCM to process notifications when app is terminated
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('📩 Background notification: ${message.messageId}');
-  debugPrint('   Title: ${message.notification?.title}');
-  debugPrint('   Body: ${message.notification?.body}');
+  debugPrint('Background notification received: ${message.messageId}');
+  debugPrint('Title: ${message.notification?.title}');
+  debugPrint('Body: ${message.notification?.body}');
 }
 
-/// FCM Service using Topic-Based Messaging
-/// 
-/// Architecture:
-/// - All users subscribe to "all-users" topic
-/// - No per-device token registration required
-/// - Backend sends to topic, Firebase handles delivery
-/// - Simpler, more scalable, no token management
 class FCMService {
   static final FCMService _instance = FCMService._internal();
   factory FCMService() => _instance;
   FCMService._internal();
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  late final FirebaseMessaging _firebaseMessaging;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
-  // Topic that all users subscribe to
   static const String _allUsersTopic = 'all-users';
-  
-  // Global navigator key for deep linking
+
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  /// Initialize FCM with topic subscription
-  /// No token registration - just subscribe to "all-users" topic
   Future<void> initialize() async {
-    debugPrint('🚀 Initializing FCM Service...');
+    debugPrint('Initializing FCM Service');
 
-    // Request notification permission
+    _firebaseMessaging = FirebaseMessaging.instance;
+
     final settings = await _firebaseMessaging.requestPermission(
       alert: true,
       badge: true,
@@ -48,63 +36,56 @@ class FCMService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('✅ Notification permission granted');
-    } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-      debugPrint('⚠️ Provisional notification permission granted');
+      debugPrint('Notification permission: granted');
+    } else if (settings.authorizationStatus ==
+        AuthorizationStatus.provisional) {
+      debugPrint('Notification permission: provisional');
     } else {
-      debugPrint('❌ Notification permission denied');
+      debugPrint('Notification permission: denied');
       return;
     }
 
-    // Initialize local notifications
     await _initializeLocalNotifications();
 
-    // Set background message handler
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // Subscribe to all-users topic
     await _subscribeToAllUsersTopic();
 
-    // Handle foreground messages (app is open and visible)
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-    // Handle notification tap when app is in background
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
 
-    // Check if app was opened from terminated state via notification
     final initialMessage = await _firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
-      debugPrint('📱 App launched from notification');
+      debugPrint('App launched from notification');
       _handleNotificationTap(initialMessage);
     }
 
-    debugPrint('✅ FCM Service initialized successfully');
+    debugPrint('FCM Service initialized successfully');
   }
 
-  /// Subscribe to the all-users topic
-  /// This replaces per-device token registration
   Future<void> _subscribeToAllUsersTopic() async {
     try {
       await _firebaseMessaging.subscribeToTopic(_allUsersTopic);
-      debugPrint('✅ Subscribed to topic: $_allUsersTopic');
+      debugPrint('Subscribed to topic: $_allUsersTopic');
     } catch (e) {
-      debugPrint('❌ Error subscribing to topic: $e');
+      debugPrint('Error subscribing to topic: $e');
     }
   }
 
-  /// Unsubscribe from all-users topic (e.g., on logout)
   Future<void> unsubscribe() async {
     try {
       await _firebaseMessaging.unsubscribeFromTopic(_allUsersTopic);
-      debugPrint('✅ Unsubscribed from topic: $_allUsersTopic');
+      debugPrint('Unsubscribed from topic: $_allUsersTopic');
     } catch (e) {
-      debugPrint('❌ Error unsubscribing from topic: $e');
+      debugPrint('Error unsubscribing from topic: $e');
     }
   }
 
-  /// Initialize local notifications plugin for Android
   Future<void> _initializeLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/launcher_icon',
+    );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -121,7 +102,6 @@ class FCMService {
       onDidReceiveNotificationResponse: _onLocalNotificationTapped,
     );
 
-    // Create Android notification channel
     const androidChannel = AndroidNotificationChannel(
       'megg_notifications',
       'Megg Notifications',
@@ -132,22 +112,21 @@ class FCMService {
     );
 
     await _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(androidChannel);
   }
 
-  /// Handle foreground messages (app is open)
   void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('📨 Foreground notification received');
-    debugPrint('   Title: ${message.notification?.title}');
-    debugPrint('   Body: ${message.notification?.body}');
-    debugPrint('   Data: ${message.data}');
+    debugPrint('Foreground notification received');
+    debugPrint('Title: ${message.notification?.title}');
+    debugPrint('Body: ${message.notification?.body}');
+    debugPrint('Data: ${message.data}');
 
-    // Show notification even when app is in foreground
     _showLocalNotification(message);
   }
 
-  /// Show local notification using flutter_local_notifications
   Future<void> _showLocalNotification(RemoteMessage message) async {
     final notification = message.notification;
     if (notification == null) return;
@@ -182,28 +161,25 @@ class FCMService {
     );
   }
 
-  /// Handle notification tap (background/terminated state)
   void _handleNotificationTap(RemoteMessage message) {
-    debugPrint('👆 Notification tapped');
+    debugPrint('Notification tapped');
     final link = message.data['link'] as String?;
-    
+
     if (link != null && link.isNotEmpty) {
-      debugPrint('   Opening link: $link');
+      debugPrint('Opening link: $link');
       _openLink(link);
     }
   }
 
-  /// Handle local notification tap
   void _onLocalNotificationTapped(NotificationResponse response) {
-    debugPrint('👆 Local notification tapped');
-    
+    debugPrint('Local notification tapped');
+
     if (response.payload != null && response.payload!.isNotEmpty) {
-      debugPrint('   Opening link: ${response.payload}');
+      debugPrint('Opening link: ${response.payload}');
       _openLink(response.payload!);
     }
   }
 
-  /// Open link in external browser
   Future<void> _openLink(String link) async {
     try {
       String finalLink = link;
@@ -215,10 +191,10 @@ class FCMService {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
-        debugPrint('❌ Cannot launch URL: $link');
+        debugPrint('Cannot launch URL: $link');
       }
     } catch (e) {
-      debugPrint('❌ Error opening link: $e');
+      debugPrint('Error opening link: $e');
     }
   }
 }

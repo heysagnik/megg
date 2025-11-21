@@ -332,6 +332,18 @@ class _ProductCardState extends State<ProductCard>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
+                            widget.product.brand.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.0,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
                             widget.product.name,
                             style: const TextStyle(
                               fontSize: 14,
@@ -360,7 +372,7 @@ class _ProductCardState extends State<ProductCard>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            widget.product.colors.join(', '),
+                            widget.product.color,
                             style: TextStyle(
                               fontSize: 11,
                               color: Colors.grey[600],
@@ -538,67 +550,38 @@ class _ProductCardState extends State<ProductCard>
                       fit: StackFit.expand,
                       children: [
                         _buildImageCarousel(),
-                        // Wishlist Heart (Grid View - Bottom Right) - Minimalist Zara Style
-                        AnimatedPositioned(
-                          duration: const Duration(milliseconds: 200),
+                        // Wishlist Heart (Grid View - Bottom Right) - Minimalist Style
+                        Positioned(
                           bottom: 8,
                           right: 8,
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 200),
-                            // Always visible for accessibility
-                            opacity: 1.0,
-                            child: GestureDetector(
-                              onTap: _handleWishlistTap,
-                              child: Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.95),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: widget.isWishlisted
-                                        ? Colors.red.withOpacity(0.2)
-                                        : Colors.black.withOpacity(0.08),
-                                    width: 1,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
+                          child: GestureDetector(
+                            onTap: _handleWishlistTap,
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.black.withOpacity(0.08),
+                                  width: 0.5,
                                 ),
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    // Heart icon
-                                    Center(
-                                      child: AnimatedScale(
-                                        duration: const Duration(
-                                          milliseconds: 200,
-                                        ),
-                                        scale:
-                                            (widget.isWishlisted ? 1.05 : 1.0) *
-                                            (_isHovering ? 1.05 : 1.0),
-                                        child: Icon(
-                                          widget.isWishlisted
-                                              ? PhosphorIconsFill.heart
-                                              : PhosphorIconsRegular.heart,
-                                          size: 17,
-                                          color: widget.isWishlisted
-                                              ? Colors.red
-                                              : Colors.black.withOpacity(0.7),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  widget.isWishlisted
+                                      ? PhosphorIconsFill.heart
+                                      : PhosphorIconsRegular.heart,
+                                  size: 16,
+                                  color: widget.isWishlisted
+                                      ? Colors.red
+                                      : Colors.black,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        // Double-tap animation overlay - Refined Zara Style
+                        // Double-tap animation overlay
                         if (_showAnimation)
                           Center(
                             child: AnimatedBuilder(
@@ -614,20 +597,11 @@ class _ProductCardState extends State<ProductCard>
                                       decoration: BoxDecoration(
                                         color: Colors.white.withOpacity(0.9),
                                         shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.1,
-                                            ),
-                                            blurRadius: 20,
-                                            spreadRadius: 5,
-                                          ),
-                                        ],
                                       ),
                                       child: Center(
                                         child: Icon(
                                           PhosphorIconsFill.heart,
-                                          size: 50,
+                                          size: 40,
                                           color: Colors.red,
                                         ),
                                       ),
@@ -641,26 +615,41 @@ class _ProductCardState extends State<ProductCard>
                     ),
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 12),
+                // Brand Name
+                Text(
+                  widget.product.brand.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.0,
+                    color: Colors.grey[600],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
                 // Product Name
                 Text(
                   widget.product.name,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w400,
-                    letterSpacing: 0.3,
-                    height: 1.2,
+                    letterSpacing: 0.5,
+                    color: Colors.black,
                   ),
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 // Product Price
                 Text(
                   'Rs ${widget.product.price.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                    color: Colors.black,
                   ),
                 ),
               ],
@@ -679,13 +668,6 @@ class _ProductCardState extends State<ProductCard>
                   decoration: BoxDecoration(
                     color: Colors.black,
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                   child: Icon(
                     PhosphorIconsRegular.check,

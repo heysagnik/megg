@@ -271,19 +271,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
       physics: const ClampingScrollPhysics(),
       child: Column(
         children: [
-          const SizedBox(height: 40),
+          const SizedBox(height: 48),
           _buildProfileHeader(),
-          const SizedBox(height: 32),
-          if (_authService.isAuthenticated)
-            _buildFavouriteReelsButton()
-          else
-            _buildSignInButton(),
-          const SizedBox(height: 32),
-          _buildWishlist(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 48),
+          
           if (_authService.isAuthenticated) ...[
+            _buildMenuButton(
+              title: 'FAVOURITE REELS',
+              icon: Icon(PhosphorIconsRegular.heart, size: 20, color: Colors.black),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => LikedReelsScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            _buildSignInButton(),
+            const SizedBox(height: 16),
+          ],
+
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Divider(
+              height: 1,
+              thickness: 0.5,
+              color: Colors.black.withOpacity(0.08),
+            ),
+          ),
+
+          _buildWishlist(),
+          
+          const SizedBox(height: 32),
+          
+          if (_authService.isAuthenticated) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Divider(
+                height: 1,
+                thickness: 0.5,
+                color: Colors.black.withOpacity(0.08),
+              ),
+            ),
             _buildLogoutButton(),
-            const SizedBox(height: 40),
+            const SizedBox(height: 48),
           ],
         ],
       ),
@@ -354,20 +386,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = _authService.currentUser;
     final userName = _authService.isAuthenticated
         ? (_userProfile?['name'] ?? user?.userMetadata?['name'] ?? 'User')
-        : 'Guest';
+        : 'GUEST';
     final userEmail = _authService.isAuthenticated ? (user?.email ?? '') : '';
     final initials = _getInitials(userName);
 
     return Column(
       children: [
         Container(
-          width: 90,
-          height: 90,
+          width: 100,
+          height: 100,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
+            color: Colors.grey[50],
             border: Border.all(
-              color: Colors.black.withOpacity(0.15),
-              width: 1.5,
+              color: Colors.black.withOpacity(0.08),
+              width: 1,
             ),
             image: user?.userMetadata?['avatar_url'] != null
                 ? DecorationImage(
@@ -384,30 +417,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fontSize: 32,
                       fontWeight: FontWeight.w300,
                       letterSpacing: 2,
-                      color: Colors.grey[800],
+                      color: Colors.black,
                     ),
                   ),
                 )
               : null,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         Text(
           userName.toUpperCase(),
           style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w400,
-            letterSpacing: 3,
+            fontSize: 24,
+            fontWeight: FontWeight.w300,
+            letterSpacing: 4,
+            color: Colors.black,
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          userEmail,
-          style: TextStyle(
-            fontSize: 12,
-            letterSpacing: 0.5,
-            color: Colors.grey[600],
+        if (userEmail.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            userEmail.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 1.5,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w400,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -419,39 +456,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
   }
 
-  Widget _buildFavouriteReelsButton() {
+  Widget _buildMenuButton({
+    required String title,
+    required Widget icon,
+    required VoidCallback onTap,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: SizedBox(
-        width: double.infinity,
-        height: 52,
-        child: OutlinedButton(
-          onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => LikedReelsScreen()),
-            );
-          },
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: Colors.black.withOpacity(0.2), width: 1),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.zero,
-            ),
-            backgroundColor: Colors.white,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 56,
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.black.withOpacity(0.08)),
+            color: Colors.white,
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(PhosphorIconsRegular.heart, size: 18, color: Colors.black),
-              const SizedBox(width: 12),
-              const Text(
-                'FAVOURITE REELS',
-                style: TextStyle(
-                  fontSize: 14,
+              icon,
+              const SizedBox(width: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                   letterSpacing: 2,
                   color: Colors.black,
                 ),
+              ),
+              const Spacer(),
+              Icon(
+                PhosphorIconsRegular.caretRight,
+                size: 16,
+                color: Colors.black.withOpacity(0.5),
               ),
             ],
           ),
@@ -500,18 +538,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (_wishlist.isEmpty)
           _buildEmptyState()
         else
-          _WishlistGrid(
-            products: _wishlist,
-            wishlistIds: _wishlistIds,
-            onProductTap: (product) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProductScreen(product: product),
-                ),
-              );
-            },
-            onWishlistToggle: _handleWishlistToggle,
+          SizedBox(
+            height: 300,
+            child: _WishlistHorizontalList(
+              products: _wishlist,
+              wishlistIds: _wishlistIds,
+              onProductTap: (product) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProductScreen(product: product),
+                  ),
+                );
+              },
+              onWishlistToggle: _handleWishlistToggle,
+            ),
           ),
       ],
     );
@@ -553,38 +594,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildSignInButton() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: SizedBox(
-        width: double.infinity,
-        height: 52,
-        child: OutlinedButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-            );
-          },
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: Colors.black.withOpacity(0.2), width: 1),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.zero,
-            ),
-            backgroundColor: Colors.white,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+          );
+        },
+        child: Container(
+          height: 56,
+          decoration: const BoxDecoration(
+            color: Colors.black,
           ),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(PhosphorIconsRegular.user, size: 18, color: Colors.black),
-              SizedBox(width: 12),
-              Text(
-                'SIGN IN',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 2,
-                  color: Colors.black,
-                ),
+          child: const Center(
+            child: Text(
+              'SIGN IN',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 2,
+                color: Colors.white,
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -600,31 +631,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: OutlinedButton(
           onPressed: _handleLogout,
           style: OutlinedButton.styleFrom(
-            side: BorderSide(color: Colors.red[700]!, width: 1),
+            side: BorderSide(color: Colors.black.withOpacity(0.1), width: 1),
             shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.zero,
             ),
             backgroundColor: Colors.white,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                PhosphorIconsRegular.signOut,
-                size: 18,
-                color: Colors.red[700],
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'SIGN OUT',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 2,
-                  color: Colors.red[700],
-                ),
-              ),
-            ],
+          child: Text(
+            'SIGN OUT',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 2,
+              color: Colors.grey[800],
+            ),
           ),
         ),
       ),
@@ -721,16 +741,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // ============================================================================
-// WISHLIST GRID WITH PAGE CONTROLLERS
+// WISHLIST HORIZONTAL LIST
 // ============================================================================
 
-class _WishlistGrid extends StatefulWidget {
+class _WishlistHorizontalList extends StatefulWidget {
   final List<Product> products;
   final Set<String> wishlistIds;
   final Function(Product) onProductTap;
   final Function(String) onWishlistToggle;
 
-  const _WishlistGrid({
+  const _WishlistHorizontalList({
     required this.products,
     required this.wishlistIds,
     required this.onProductTap,
@@ -738,10 +758,10 @@ class _WishlistGrid extends StatefulWidget {
   });
 
   @override
-  State<_WishlistGrid> createState() => _WishlistGridState();
+  State<_WishlistHorizontalList> createState() => _WishlistHorizontalListState();
 }
 
-class _WishlistGridState extends State<_WishlistGrid> {
+class _WishlistHorizontalListState extends State<_WishlistHorizontalList> {
   final Map<String, PageController> _pageControllers = {};
 
   @override
@@ -759,7 +779,7 @@ class _WishlistGridState extends State<_WishlistGrid> {
   }
 
   @override
-  void didUpdateWidget(_WishlistGrid oldWidget) {
+  void didUpdateWidget(_WishlistHorizontalList oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.products != oldWidget.products) {
       _initializePageControllers();
@@ -776,30 +796,25 @@ class _WishlistGridState extends State<_WishlistGrid> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.65,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: widget.products.length,
-        itemBuilder: (context, index) {
-          final product = widget.products[index];
-          return ProductCard(
+      itemCount: widget.products.length,
+      itemBuilder: (context, index) {
+        final product = widget.products[index];
+        return Container(
+          width: 160, // Fixed width for horizontal items
+          margin: const EdgeInsets.only(right: 12),
+          child: ProductCard(
             product: product,
             isListView: false,
             onTap: () => widget.onProductTap(product),
             isWishlisted: widget.wishlistIds.contains(product.id),
             pageController: _pageControllers[product.id],
             onWishlistToggle: widget.onWishlistToggle,
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

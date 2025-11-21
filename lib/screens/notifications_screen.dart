@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/notification_history_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../widgets/loader.dart';
+import '../widgets/custom_refresh_indicator.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -155,7 +156,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             );
           }
 
-          return RefreshIndicator(
+          return CustomRefreshIndicator(
             onRefresh: () => _loadNotifications(loadMore: false),
             color: Colors.black,
             child: ListView.separated(

@@ -102,8 +102,8 @@ class _MainNavigationState extends State<MainNavigation> {
       case 'guides':
         return Icon(
           isSelected
-              ? PhosphorIconsFill.bookOpen
-              : PhosphorIconsRegular.bookOpen,
+              ? PhosphorIconsFill.books
+              : PhosphorIconsRegular.books,
           size: 22,
           color: color,
         );

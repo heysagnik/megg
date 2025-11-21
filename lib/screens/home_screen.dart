@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:megg/screens/search_screen.dart';
-import 'package:megg/screens/notifications_screen.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'dart:async';
 import '../models/product.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../widgets/product_widget.dart';
-import '../widgets/loader.dart';
 import '../services/trending_service.dart';
 import '../services/product_service.dart';
 import '../services/outfit_service.dart';
 import '../services/wishlist_service.dart';
-import '../services/notification_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'product_screen.dart';
 import 'search_results_screen.dart';
@@ -29,7 +26,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final ProductService _productService = ProductService();
   final OutfitService _outfitService = OutfitService();
   final WishlistService _wishlistService = WishlistService();
-  final NotificationService _notificationService = NotificationService();
 
   List<Product> _trendingProducts = [];
   List<Product> _newArrivals = [];
@@ -57,9 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _outfitPageController = PageController(initialPage: _currentOutfitPage);
     _loadHomeData();
-    
   }
-
 
   Future<void> _loadHomeData() async {
     await Future.wait([
@@ -289,27 +283,15 @@ class _HomeScreenState extends State<HomeScreen> {
         title: 'MEGG',
         actions: [
           IconButton(
-            icon: Icon(PhosphorIconsRegular.bell, size: 20),
+            icon: Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const NotificationsScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const SearchScreen()),
               );
             },
             splashRadius: 20,
           ),
-          // IconButton(
-          //   icon: Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
-          //   onPressed: () {
-          //     Navigator.push(
-          //       context,
-          //       MaterialPageRoute(builder: (context) => const SearchScreen()),
-          //     );
-          //   },
-          //   splashRadius: 20,
-          // ),
           const SizedBox(width: 8),
         ],
       ),
@@ -317,18 +299,42 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDailyOutfitSection(context),
-            const SizedBox(height: 32),
+            if (_shouldShowDailyOutfits()) ...[
+              _buildDailyOutfitSection(context),
+              const SizedBox(height: 32),
+            ],
             _buildCategorySection(context),
             const SizedBox(height: 32),
-            _buildFeaturedProducts(context),
-            const SizedBox(height: 32),
-            _buildNewArrivals(context),
-            const SizedBox(height: 24),
+            if (_shouldShowTrending()) ...[
+              _buildFeaturedProducts(context),
+              const SizedBox(height: 32),
+            ],
+            if (_shouldShowNewArrivals()) ...[
+              _buildNewArrivals(context),
+              const SizedBox(height: 24),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  bool _shouldShowDailyOutfits() {
+    return !_isLoadingOutfits &&
+        _dailyOutfitsError == null &&
+        _dailyOutfits.isNotEmpty;
+  }
+
+  bool _shouldShowTrending() {
+    return !_isLoadingTrending &&
+        _trendingError == null &&
+        _trendingProducts.isNotEmpty;
+  }
+
+  bool _shouldShowNewArrivals() {
+    return !_isLoadingNew &&
+        _newArrivalsError == null &&
+        _newArrivals.isNotEmpty;
   }
 
   Widget _buildDailyOutfitSection(BuildContext context) {
@@ -336,56 +342,6 @@ class _HomeScreenState extends State<HomeScreen> {
       height: 550,
       child: Builder(
         builder: (context) {
-          if (_isLoadingOutfits) {
-            return const Center(child: Loader());
-          }
-
-          if (_dailyOutfitsError != null) {
-            return Container(
-              color: Colors.grey[100],
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    PhosphorIconsRegular.warningCircle,
-                    size: 48,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'UNABLE TO LOAD',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _loadDailyOutfits,
-                    child: const Text('RETRY'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (_dailyOutfits.isEmpty) {
-            return Container(
-              color: Colors.grey[100],
-              alignment: Alignment.center,
-              child: Text(
-                'NO DAILY OUTFITS AVAILABLE',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  letterSpacing: 2,
-                ),
-              ),
-            );
-          }
-
           return Stack(
             children: [
               PageView.builder(
@@ -666,87 +622,39 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        if (_isLoadingTrending)
-          const SizedBox(height: 320, child: Center(child: Loader()))
-        else if (_trendingError != null)
-          SizedBox(
-            height: 320,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    PhosphorIconsRegular.warningCircle,
-                    size: 48,
-                    color: Colors.grey[400],
+        SizedBox(
+          height: 320,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _trendingProducts.length,
+            itemBuilder: (context, index) {
+              final product = _trendingProducts[index];
+              return SizedBox(
+                width: 200,
+                height: 320,
+                child: Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  child: ProductCard(
+                    product: product,
+                    isListView: false,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProductScreen(product: product),
+                        ),
+                      );
+                    },
+                    isWishlisted: _homeWishlist.contains(product.id),
+                    pageController: _trendingPageControllers[product.id],
+                    onWishlistToggle: _handleWishlistToggle,
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'UNABLE TO LOAD',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _loadTrendingProducts,
-                    child: const Text('RETRY'),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else if (_trendingProducts.isEmpty)
-          SizedBox(
-            height: 320,
-            child: Center(
-              child: Text(
-                'NO TRENDING PRODUCTS',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  letterSpacing: 2,
                 ),
-              ),
-            ),
-          )
-        else
-          SizedBox(
-            height: 320,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _trendingProducts.length,
-              itemBuilder: (context, index) {
-                final product = _trendingProducts[index];
-                return SizedBox(
-                  width: 200,
-                  height: 320,
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 12),
-                    child: ProductCard(
-                      product: product,
-                      isListView: false,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                ProductScreen(product: product),
-                          ),
-                        );
-                      },
-                      isWishlisted: _homeWishlist.contains(product.id),
-                      pageController: _trendingPageControllers[product.id],
-                      onWishlistToggle: _handleWishlistToggle,
-                    ),
-                  ),
-                );
-              },
-            ),
+              );
+            },
           ),
+        ),
       ],
     );
   }
@@ -798,85 +706,38 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        if (_isLoadingNew)
-          const SizedBox(height: 300, child: Center(child: Loader()))
-        else if (_newArrivalsError != null)
-          SizedBox(
-            height: 300,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    PhosphorIconsRegular.warningCircle,
-                    size: 48,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'UNABLE TO LOAD',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      letterSpacing: 2,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.65,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 16,
+            ),
+            itemCount: _newArrivals.length,
+            itemBuilder: (context, index) {
+              final product = _newArrivals[index];
+              return ProductCard(
+                product: product,
+                isListView: false,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProductScreen(product: product),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _loadNewArrivals,
-                    child: const Text('RETRY'),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else if (_newArrivals.isEmpty)
-          SizedBox(
-            height: 300,
-            child: Center(
-              child: Text(
-                'NO NEW ARRIVALS',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                  letterSpacing: 2,
-                ),
-              ),
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.65,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: _newArrivals.length,
-              itemBuilder: (context, index) {
-                final product = _newArrivals[index];
-                return ProductCard(
-                  product: product,
-                  isListView: false,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProductScreen(product: product),
-                      ),
-                    );
-                  },
-                  isWishlisted: _homeWishlist.contains(product.id),
-                  pageController: _newArrivalsPageControllers[product.id],
-                  onWishlistToggle: _handleWishlistToggle,
-                );
-              },
-            ),
+                  );
+                },
+                isWishlisted: _homeWishlist.contains(product.id),
+                pageController: _newArrivalsPageControllers[product.id],
+                onWishlistToggle: _handleWishlistToggle,
+              );
+            },
           ),
+        ),
       ],
     );
   }

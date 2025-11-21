@@ -253,7 +253,15 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
             spacing: 16,
             runSpacing: 16,
             children: [
-              _buildColorSwatchWithLabel(_combo!.primaryColor, 'PRIMARY'),
+              // Prefer new API fields (colorA / colorB)
+              if (_combo!.colorA != null && _combo!.colorA!.isNotEmpty)
+                _buildColorSwatchWithLabel(_combo!.colorA!, 'PRIMARY'),
+              if (_combo!.colorB != null && _combo!.colorB!.isNotEmpty)
+                _buildColorSwatchWithLabel(_combo!.colorB!, 'SECONDARY'),
+
+              // if ((_combo!.colorA == null || _combo!.colorA!.isEmpty) &&
+              //     _combo!.primaryColor.isNotEmpty)
+              //   _buildColorSwatchWithLabel(_combo!.primaryColor, 'PRIMARY'),
               ..._combo!.comboColors.asMap().entries.map(
                 (entry) => _buildColorSwatchWithLabel(
                   entry.value,

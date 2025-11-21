@@ -265,6 +265,50 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ),
             ),
           ),
+
+          // Skip Button
+          Positioned(
+            top: -10 ,
+            right: -10,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0), 
+                child: TextButton(
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          } else {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (context) => const MainNavigation(),
+                              ),
+                            );
+                          }
+                        },
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    
+                  ),
+                  child: const Text(
+                    'SKIP',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 2.0,
+                      color: Color(0xFFEFEFEF), 
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

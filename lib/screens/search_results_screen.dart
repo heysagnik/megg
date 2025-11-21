@@ -9,6 +9,7 @@ import '../services/wishlist_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../widgets/filter_sort_bar.dart';
 import '../widgets/product_widget.dart';
+import '../widgets/custom_refresh_indicator.dart';
 import 'product_screen.dart';
 import 'search_screen.dart';
 import '../widgets/loader.dart';
@@ -369,8 +370,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     // Extract available colors from results
     final colors = <String>{};
     for (final product in _searchResults) {
-      if (product.colors.isNotEmpty) {
-        colors.addAll(product.colors);
+      if (product.color.isNotEmpty) {
+        colors.add(product.color);
       }
     }
     _availableColors = colors.toList()..sort();
@@ -414,8 +415,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
     final colors = <String>{};
     for (final product in _searchResults) {
-      if (product.colors.isNotEmpty) {
-        colors.addAll(product.colors);
+      if (product.color.isNotEmpty) {
+        colors.add(product.color);
       }
     }
 
@@ -555,8 +556,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
     return Stack(
       children: [
-        RefreshIndicator(
+        CustomRefreshIndicator(
           onRefresh: () => _performSearch(_currentQuery, page: 1),
+          color: Colors.black,
           child: NotificationListener<ScrollNotification>(
             onNotification: _handleScrollNotification,
             child: _isGridView ? _buildGridView() : _buildListView(),
