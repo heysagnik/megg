@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'product_screen.dart';
 import 'search_results_screen.dart';
 import 'color_combo_list_screen.dart';
+import '../widgets/loader.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingTrending = true;
   bool _isLoadingNew = true;
   bool _isLoadingOutfits = true;
+  bool _isScreenLoading = true;
 
   String? _trendingError;
   String? _newArrivalsError;
@@ -56,12 +58,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadHomeData() async {
+    // Ensure loading state is true at start
+    if (mounted) setState(() => _isScreenLoading = true);
+
     await Future.wait([
       _loadDailyOutfits(),
       _loadTrendingProducts(),
       _loadNewArrivals(),
       _loadWishlist(),
     ]);
+
+    if (mounted) {
+      setState(() => _isScreenLoading = false);
+    }
   }
 
   Future<void> _loadWishlist() async {
@@ -295,27 +304,29 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_shouldShowDailyOutfits()) ...[
-              _buildDailyOutfitSection(context),
-              const SizedBox(height: 32),
-            ],
-            _buildCategorySection(context),
-            const SizedBox(height: 32),
-            if (_shouldShowTrending()) ...[
-              _buildFeaturedProducts(context),
-              const SizedBox(height: 32),
-            ],
-            if (_shouldShowNewArrivals()) ...[
-              _buildNewArrivals(context),
-              const SizedBox(height: 24),
-            ],
-          ],
-        ),
-      ),
+      body: _isScreenLoading
+          ? const Center(child: Loader(showCaption: true))
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_shouldShowDailyOutfits()) ...[
+                    _buildDailyOutfitSection(context),
+                    const SizedBox(height: 32),
+                  ],
+                  _buildCategorySection(context),
+                  const SizedBox(height: 32),
+                  if (_shouldShowTrending()) ...[
+                    _buildFeaturedProducts(context),
+                    const SizedBox(height: 32),
+                  ],
+                  if (_shouldShowNewArrivals()) ...[
+                    _buildNewArrivals(context),
+                    const SizedBox(height: 24),
+                  ],
+                ],
+              ),
+            ),
     );
   }
 

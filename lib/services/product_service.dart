@@ -130,44 +130,7 @@ class ProductService {
     }
   }
 
-  Future<Product> createProduct(Map<String, dynamic> productData) async {
-    try {
-      final response = await _apiClient.post(
-        '/products',
-        body: productData,
-        requiresAuth: true,
-      );
 
-      return Product.fromJson(response['product']);
-    } catch (e) {
-      throw Exception('Failed to create product: ${e.toString()}');
-    }
-  }
-
-  Future<Product> updateProduct(
-    String productId,
-    Map<String, dynamic> updates,
-  ) async {
-    try {
-      final response = await _apiClient.put(
-        '/products/$productId',
-        body: updates,
-        requiresAuth: true,
-      );
-
-      return Product.fromJson(response['product']);
-    } catch (e) {
-      throw Exception('Failed to update product: ${e.toString()}');
-    }
-  }
-
-  Future<void> deleteProduct(String productId) async {
-    try {
-      await _apiClient.delete('/products/$productId', requiresAuth: true);
-    } catch (e) {
-      throw Exception('Failed to delete product: ${e.toString()}');
-    }
-  }
   Future<void> recordProductClick(String productId) async {
     try {
       await _apiClient.post(

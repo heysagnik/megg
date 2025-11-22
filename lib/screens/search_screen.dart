@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../widgets/aesthetic_app_bar.dart';
-import '../widgets/custom_icons.dart';
 import '../services/search_history_service.dart';
 import 'search_results_screen.dart';
 
@@ -21,13 +23,16 @@ class _SearchScreenState extends State<SearchScreen>
   late Animation<double> _slideAnimation;
 
   final List<Map<String, dynamic>> _categories = [
-    {'icon': CustomIcons.shirt, 'label': 'SHIRTS'},
-    {'icon': CustomIcons.pants, 'label': 'PANTS'},
-    {'icon': CustomIcons.skincare, 'label': 'SKINCARE'},
+    {'icon': PhosphorIconsRegular.tShirt, 'label': 'SHIRTS'},
+    {'icon': PhosphorIconsRegular.pants, 'label': 'PANTS'},
+    {'icon': PhosphorIconsRegular.sparkle, 'label': 'SKINCARE'},
   ];
 
   int _currentIndex = 0;
   List<String> _searchHistory = [];
+  List<Map<String, dynamic>> _suggestions = [];
+  Timer? _debounce;
+  bool _isLoadingSuggestions = false;
 
   @override
   void initState() {
@@ -85,25 +90,55 @@ class _SearchScreenState extends State<SearchScreen>
     super.dispose();
   }
 
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _fetchSuggestions(query);
+    });
+    setState(() {});
+  }
+
+  Future<void> _fetchSuggestions(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _suggestions = [];
+        _isLoadingSuggestions = false;
+      });
+      return;
+    }
+
+    setState(() => _isLoadingSuggestions = true);
+
+    final url = Uri.parse(
+      'https://suggestions-alpha.vercel.app/suggest?q=$query',
+    );
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            _suggestions = List<Map<String, dynamic>>.from(data);
+            _isLoadingSuggestions = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoadingSuggestions = false);
+      }
+    } catch (e) {
+      debugPrint('Error fetching suggestions: $e');
+      if (mounted) setState(() => _isLoadingSuggestions = false);
+    }
+  }
+
   void _submit() {
     final query = _controller.text.trim();
     if (query.isEmpty) return;
-
-    // Save to search history
-    _historyService.addSearchQuery(query);
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SearchResultsScreen(initialQuery: query),
-      ),
-    );
+    _performSearch(query);
   }
 
-  void _searchFromHistory(String query) {
-    // Save to history (moves it to top)
+  void _performSearch(String query) {
     _historyService.addSearchQuery(query);
-
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -127,7 +162,10 @@ class _SearchScreenState extends State<SearchScreen>
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: _buildSearchBar(),
           ),
-          if (_searchHistory.isNotEmpty) _buildSearchHistory(),
+          if (_controller.text.isNotEmpty)
+            _buildSuggestionsList()
+          else if (_searchHistory.isNotEmpty)
+            _buildSearchHistory(),
         ],
       ),
     );
@@ -207,6 +245,7 @@ class _SearchScreenState extends State<SearchScreen>
                   isCollapsed: true,
                 ),
                 textInputAction: TextInputAction.search,
+                onChanged: _onSearchChanged,
                 onSubmitted: (_) => _submit(),
               ),
             ),
@@ -215,6 +254,7 @@ class _SearchScreenState extends State<SearchScreen>
                 icon: Icon(Icons.close, size: 18, color: Colors.grey[600]),
                 onPressed: () {
                   _controller.clear();
+                  _onSearchChanged('');
                   setState(() {});
                   _focus.requestFocus();
                 },
@@ -223,9 +263,10 @@ class _SearchScreenState extends State<SearchScreen>
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               ),
             IconButton(
-              icon: CustomIcons.search(
+              icon: Icon(
+                PhosphorIconsRegular.magnifyingGlass,
                 size: 20,
-                color: _focus.hasFocus ? Colors.black : Colors.grey[600]!,
+                color: _focus.hasFocus ? Colors.black : Colors.grey[600],
               ),
               onPressed: _submit,
               splashRadius: 20,
@@ -236,11 +277,8 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  Widget _buildCategoryItem(
-    Widget Function({double size, Color color, bool filled}) iconBuilder,
-    String label,
-  ) {
-    return iconBuilder(size: 20, color: Colors.grey[700]!);
+  Widget _buildCategoryItem(IconData icon, String label) {
+    return Icon(icon, size: 20, color: Colors.grey[700]);
   }
 
   Widget _buildSearchHistory() {
@@ -291,12 +329,75 @@ class _SearchScreenState extends State<SearchScreen>
                     splashRadius: 18,
                     padding: const EdgeInsets.all(8),
                   ),
-                  onTap: () => _searchFromHistory(query),
+                  onTap: () => _performSearch(query),
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionsList() {
+    if (_isLoadingSuggestions) {
+      return const Expanded(
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.black,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_suggestions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Expanded(
+      child: ListView.builder(
+        itemCount: _suggestions.length,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        itemBuilder: (context, index) {
+          final suggestion = _suggestions[index];
+          final term = suggestion['term'] as String;
+          final display = suggestion['display'] as String;
+          final type = suggestion['type'] as String;
+
+          IconData icon;
+          switch (type) {
+            case 'category':
+              icon = PhosphorIconsRegular.squaresFour;
+              break;
+            case 'subcategory':
+              icon = PhosphorIconsRegular.tag;
+              break;
+            case 'combination':
+              icon = PhosphorIconsRegular.tShirt;
+              break;
+            default:
+              icon = PhosphorIconsRegular.magnifyingGlass;
+          }
+
+          return ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            leading: Icon(icon, size: 18, color: Colors.grey[600]),
+            title: Text(
+              display,
+              style: const TextStyle(fontSize: 14, letterSpacing: 0.3),
+            ),
+            onTap: () => _performSearch(term),
+          );
+        },
       ),
     );
   }
