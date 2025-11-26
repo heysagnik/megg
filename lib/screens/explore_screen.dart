@@ -429,19 +429,19 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   Widget _buildFitCategories(BuildContext context) {
     final categories = [
-      {'name': 'Jacket', 'image': 'assets/category/jacket.png'},
+      {'name': 'Jacket', 'image': 'assets/category/jacket.jpg'},
       {'name': 'Jeans', 'image': 'assets/category/jeans.jpg'},
-      {'name': 'Shoes', 'image': 'assets/category/shoes.png'},
+      {'name': 'Shoes', 'image': 'assets/category/shoes.jpg'},
       {'name': 'Skincare', 'image': 'assets/category/skin care.png'},
-      {'name': 'Perfume', 'image': 'assets/category/perfume .png'},
-      {'name': 'Shirt', 'image': 'assets/category/shirt.png'},
-      {'name': 'Trackpants', 'image': 'assets/category/track pants.png'},
-      {'name': 'Hoodies', 'image': 'assets/category/hoodies.png'},
-      {'name': 'Sweater', 'image': 'assets/category/sweater.png'},
-      {'name': 'Sweatshirt', 'image': 'assets/category/sweatshirt.png'},
-      {'name': 'Tshirt', 'image': 'assets/category/tshirt.png'},
+      {'name': 'Perfume', 'image': 'assets/category/perfume .jpg'},
+      {'name': 'Shirt', 'image': 'assets/category/shirt.jpg'},
+      {'name': 'Trackpants', 'image': 'assets/category/track pants.jpg'},
+      {'name': 'Hoodies', 'image': 'assets/category/hoodies.jpg'},
+      {'name': 'Sweater', 'image': 'assets/category/sweater.jpg'},
+      {'name': 'Sweatshirt', 'image': 'assets/category/sweatshirt.jpg'},
+      {'name': 'Tshirt', 'image': 'assets/category/tshirt.jpg'},
 
-      {'name': 'Accesories', 'image': 'assets/category/accessories.png'},
+      {'name': 'Accesories', 'image': 'assets/category/accessories.jpg'},
       {'name': 'Innerwear', 'image': 'assets/category/innerwear.png'},
 
       {'name': 'Sports Wear', 'image': 'assets/category/sports.png'},

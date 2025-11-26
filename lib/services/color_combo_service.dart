@@ -61,6 +61,27 @@ class ColorComboService {
   }
 
   /// Get color combos by group type
+  /// Get recommended color combos based on a combo ID
+  Future<List<ColorCombo>> getRecommendedCombos(String comboId) async {
+    try {
+      final response = await _apiClient.get(
+        '/color-combos/$comboId/recommendations',
+      );
+
+      final data = response['data'] ?? response;
+
+      if (data is List) {
+        return data.map((json) => ColorCombo.fromJson(json)).toList();
+      }
+
+      return [];
+    } catch (e) {
+      // Return empty list instead of throwing to avoid blocking UI
+      return [];
+    }
+  }
+
+  /// Get color combos by group type
   Future<List<ColorCombo>> getCombosByGroup(String group) async {
     return getColorCombos(group: group);
   }

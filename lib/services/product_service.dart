@@ -131,9 +131,9 @@ class ProductService {
   }
 
 
-  Future<List<Product>> getBrandRecommendations(String productId) async {
+  Future<List<Product>> getProductRecommendations(String productId) async {
     try {
-      final response = await _apiClient.get('/products/$productId/brand-recommendations');
+      final response = await _apiClient.get('/products/$productId/recommendations');
       final data = response['data'];
 
       if (data is List) {
@@ -142,7 +142,7 @@ class ProductService {
 
       return [];
     } catch (e) {
-      throw Exception('Failed to fetch brand recommendations: ${e.toString()}');
+      throw Exception('Failed to fetch product recommendations: ${e.toString()}');
     }
   }
 

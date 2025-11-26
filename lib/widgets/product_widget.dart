@@ -240,15 +240,14 @@ class _ProductCardState extends State<ProductCard>
         ? widget.pageController!.page?.round() ?? 0
         : 0;
 
-    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
+    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 800), (_) {
       if (!mounted || widget.pageController == null) return;
       if (!widget.pageController!.hasClients) return;
 
-      _currentImageIndex =
-          (_currentImageIndex + 1) % widget.product.images.length;
+      final nextPage = (widget.pageController!.page?.round() ?? 0) + 1;
 
       widget.pageController!.animateToPage(
-        _currentImageIndex,
+        nextPage,
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
       );
@@ -725,13 +724,14 @@ class _ProductCardState extends State<ProductCard>
 
     return PageView.builder(
       controller: widget.pageController,
-      itemCount: widget.product.images.length,
+      // itemCount is removed to allow infinite scrolling
       itemBuilder: (context, index) {
+        final imageIndex = index % widget.product.images.length;
         return Container(
           decoration: BoxDecoration(
             color: Colors.grey[100],
             image: DecorationImage(
-              image: NetworkImage(widget.product.images[index]),
+              image: NetworkImage(widget.product.images[imageIndex]),
               fit: BoxFit.cover,
             ),
           ),

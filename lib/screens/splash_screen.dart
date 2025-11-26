@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:video_player/video_player.dart';
+import 'package:lottie/lottie.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../config/api_config.dart';
@@ -21,14 +21,13 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
-  VideoPlayerController? _videoController;
+  late AnimationController _lottieController;
   Timer? _safetyTimer;
 
-  bool _videoInitialized = false;
-  bool _videoCompleted = false;
+  bool _animationCompleted = false;
   bool _slideStarted = false;
   bool _isAuthenticated = false;
   bool _showSplash = true;
@@ -42,7 +41,7 @@ class _SplashScreenState extends State<SplashScreen>
     _initializeUI();
     _initApp();
     if (!hasShown) {
-      _initializeVideo();
+      _initializeLottie();
     }
   }
 
@@ -137,69 +136,26 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
-  Future<void> _initializeVideo() async {
-    _videoController = VideoPlayerController.asset('assets/animatedlogo.mp4');
+  void _initializeLottie() {
+    _lottieController = AnimationController(vsync: this);
 
-    try {
-      await _videoController!.initialize();
-      if (!mounted) return;
-
-      await _videoController!.setVolume(0.0);
-      await _videoController!.setLooping(false);
-      _videoController!.addListener(_onVideoProgress);
-
-      final duration = _videoController!.value.duration;
-      if (duration != Duration.zero) {
-        // Use a safety timer that is longer than the video duration
-        // to prevent getting stuck if the video player fails to report progress
-        _safetyTimer = Timer(duration + const Duration(seconds: 2), () {
-          if (mounted && !_videoCompleted) _onVideoComplete();
-        });
+    _lottieController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _onAnimationComplete();
       }
-
-      await _videoController!.play();
-
-      if (mounted) {
-        setState(() => _videoInitialized = true);
-      }
-    } catch (e) {
-      debugPrint('Video initialization failed: $e');
-      if (mounted) {
-        setState(() => _videoInitialized = false);
-        _onVideoComplete();
-      }
-    }
+    });
   }
 
-  void _onVideoProgress() {
-    if (!mounted ||
-        _videoCompleted ||
-        _videoController == null ||
-        !_videoController!.value.isInitialized)
-      return;
-
-    final position = _videoController!.value.position;
-    final duration = _videoController!.value.duration;
-
-    // Start slide slightly before video ends for smoothness
-    // Reduced buffer to 200ms to ensure video plays mostly to the end
-    if (!_slideStarted &&
-        duration != Duration.zero &&
-        position >= duration - const Duration(milliseconds: 200)) {
-      _onVideoComplete();
-    }
-  }
-
-  void _onVideoComplete() {
-    if (!mounted || _videoCompleted) return;
+  void _onAnimationComplete() {
+    if (!mounted || _animationCompleted) return;
 
     hasShown = true;
-    setState(() => _videoCompleted = true);
+    setState(() => _animationCompleted = true);
     _tryNavigate();
   }
 
   void _tryNavigate() {
-    if (_videoCompleted && _appInitialized && !_slideStarted) {
+    if (_animationCompleted && _appInitialized && !_slideStarted) {
       _slideStarted = true;
       _slideController.forward();
     }
@@ -209,8 +165,7 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _safetyTimer?.cancel();
     _slideController.dispose();
-    _videoController?.removeListener(_onVideoProgress);
-    _videoController?.dispose();
+    _lottieController.dispose();
     super.dispose();
   }
 
@@ -240,15 +195,14 @@ class _SplashScreenState extends State<SplashScreen>
               onVerticalDragEnd: (details) {
                 // Detect swipe up to dismiss
                 if (details.primaryVelocity! < -500) {
-                  _onVideoComplete();
+                  _onAnimationComplete();
                 }
               },
               child: Container(
                 color: Colors.black,
                 child: Stack(
                   children: [
-                    if (_videoInitialized && _videoController != null)
-                      _buildVideoPlayer(),
+                    _buildLottieAnimation(),
                   ],
                 ),
               ),
@@ -259,15 +213,24 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  Widget _buildVideoPlayer() {
-    return Positioned.fill(
-      child: FittedBox(
-        fit: BoxFit.fitWidth,
-        child: SizedBox(
-          width: _videoController!.value.size.width,
-          height: _videoController!.value.size.height,
-          child: VideoPlayer(_videoController!),
-        ),
+  Widget _buildLottieAnimation() {
+    return Center(
+      child: Lottie.asset(
+        'assets/animation.json',
+        controller: _lottieController,
+        onLoaded: (composition) {
+          _lottieController
+            ..duration = composition.duration
+            ..forward();
+
+          // Safety timer in case animation doesn't complete
+          _safetyTimer =
+              Timer(composition.duration + const Duration(seconds: 1), () {
+            if (mounted && !_animationCompleted) _onAnimationComplete();
+          });
+        },
+        fit: BoxFit.contain,
+        width: MediaQuery.of(context).size.width * 0.8,
       ),
     );
   }

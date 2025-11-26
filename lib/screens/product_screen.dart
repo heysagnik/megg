@@ -23,15 +23,15 @@ class _ProductScreenState extends State<ProductScreen> {
   final PageController _pageController = PageController();
   final WishlistService _wishlistService = WishlistService();
   
-  List<Product> _brandRecommendations = [];
-  bool _isLoadingBrandRecommendations = false;
+  List<Product> _productRecommendations = [];
+  bool _isLoadingProductRecommendations = false;
   final Map<String, PageController> _recommendationPageControllers = {};
 
   @override
   void initState() {
     super.initState();
     _checkWishlistStatus();
-    _loadBrandRecommendations();
+    _loadProductRecommendations();
     _pageController.addListener(() {
       final page = _pageController.page?.round() ?? 0;
       if (_currentImageIndex != page) {
@@ -167,7 +167,7 @@ class _ProductScreenState extends State<ProductScreen> {
                 const SizedBox(height: 32),
                 _buildDescription(),
                 const SizedBox(height: 40),
-                _buildBrandRecommendations(),
+                _buildProductRecommendations(),
                 const SizedBox(height: 120),
               ],
             ),
@@ -273,7 +273,7 @@ class _ProductScreenState extends State<ProductScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.product.category.toUpperCase(),
+            widget.product.brand.toUpperCase(),
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w500,
@@ -436,14 +436,14 @@ class _ProductScreenState extends State<ProductScreen> {
     );
   }
 
-  Future<void> _loadBrandRecommendations() async {
-    setState(() => _isLoadingBrandRecommendations = true);
+  Future<void> _loadProductRecommendations() async {
+    setState(() => _isLoadingProductRecommendations = true);
     try {
-      final products = await ProductService().getBrandRecommendations(widget.product.id);
+      final products = await ProductService().getProductRecommendations(widget.product.id);
       if (mounted) {
         setState(() {
-          _brandRecommendations = products;
-          _isLoadingBrandRecommendations = false;
+          _productRecommendations = products;
+          _isLoadingProductRecommendations = false;
         });
         for (final p in products) {
           _recommendationPageControllers.putIfAbsent(p.id, () => PageController());
@@ -451,13 +451,13 @@ class _ProductScreenState extends State<ProductScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoadingBrandRecommendations = false);
+        setState(() => _isLoadingProductRecommendations = false);
       }
     }
   }
 
-  Widget _buildBrandRecommendations() {
-    if (_isLoadingBrandRecommendations) {
+  Widget _buildProductRecommendations() {
+    if (_isLoadingProductRecommendations) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(20.0),
@@ -466,7 +466,7 @@ class _ProductScreenState extends State<ProductScreen> {
       );
     }
 
-    if (_brandRecommendations.isEmpty) return const SizedBox.shrink();
+    if (_productRecommendations.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,7 +474,7 @@ class _ProductScreenState extends State<ProductScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: Text(
-            'MORE FROM ${widget.product.brand.toUpperCase()}',
+            'YOU MAY ALSO LIKE',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
@@ -484,32 +484,32 @@ class _ProductScreenState extends State<ProductScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        SizedBox(
-          height: 320,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: _brandRecommendations.length,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.65,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 24,
+            ),
+            itemCount: _productRecommendations.length,
             itemBuilder: (context, index) {
-              final product = _brandRecommendations[index];
-              return Container(
-                width: 200,
-                margin: const EdgeInsets.only(right: 16),
-                child: ProductCard(
-                  product: product,
-                  isListView: false,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProductScreen(product: product),
-                      ),
-                    );
-                  },
-                  pageController: _recommendationPageControllers[product.id],
-                  // We can add wishlist functionality here if needed, 
-                  // but for now let's keep it simple or reuse existing logic if accessible
-                ),
+              final product = _productRecommendations[index];
+              return ProductCard(
+                product: product,
+                isListView: false,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProductScreen(product: product),
+                    ),
+                  );
+                },
+                pageController: _recommendationPageControllers[product.id],
               );
             },
           ),

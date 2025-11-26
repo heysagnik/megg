@@ -6,6 +6,7 @@ import '../services/color_combo_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../widgets/loader.dart';
 import '../widgets/product_widget.dart';
+import '../widgets/recommended_combos_section.dart';
 import 'product_screen.dart';
 
 class ColorComboDetailScreen extends StatefulWidget {
@@ -22,7 +23,9 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
 
   ColorCombo? _combo;
   List<Product> _products = [];
+  List<ColorCombo> _recommendedCombos = [];
   bool _isLoading = true;
+  bool _isLoadingRecommendations = true;
   String? _error;
 
   final Map<String, PageController> _pageControllers = {};
@@ -56,6 +59,8 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
       for (final product in _products) {
         _pageControllers.putIfAbsent(product.id, () => PageController());
       }
+
+      _loadRecommendations();
     } catch (e) {
       if (!mounted) return;
 
@@ -63,6 +68,27 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
         _isLoading = false;
         _error = e.toString().replaceAll('Exception: ', '');
       });
+    }
+  }
+
+  Future<void> _loadRecommendations() async {
+    if (_combo == null) return;
+
+    try {
+      final recommendations = await _comboService.getRecommendedCombos(
+        _combo!.id,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _recommendedCombos = recommendations;
+        _isLoadingRecommendations = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingRecommendations = false);
+      }
     }
   }
 
@@ -168,6 +194,11 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
                 _buildColorPalette(),
                 const SizedBox(height: 32),
                 _buildProductsSection(),
+                const SizedBox(height: 32),
+                RecommendedCombosSection(
+                  recommendations: _recommendedCombos,
+                  isLoading: _isLoadingRecommendations,
+                ),
                 const SizedBox(height: 24),
               ],
             ),

@@ -31,6 +31,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   share_plus: ^10.0.0
   path_provider: ^2.1.4
+  lottie: ^3.3.2
 
 dev_dependencies:
   flutter_test:
@@ -53,6 +54,7 @@ flutter:
     - assets/logo.png
     - assets/category/
     - assets/guides/
+    - assets/animation.json
 
   fonts:
     - family: FuturaCyrillicBook
