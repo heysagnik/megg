@@ -240,7 +240,7 @@ class _ProductCardState extends State<ProductCard>
         ? widget.pageController!.page?.round() ?? 0
         : 0;
 
-    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
       if (!mounted || widget.pageController == null) return;
       if (!widget.pageController!.hasClients) return;
 

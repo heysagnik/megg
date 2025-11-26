@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:megg/screens/search_screen.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
 import '../services/wishlist_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
+import '../widgets/product_widget.dart';
 
 class ProductScreen extends StatefulWidget {
   final Product product;
@@ -20,11 +22,16 @@ class _ProductScreenState extends State<ProductScreen> {
   int _currentImageIndex = 0;
   final PageController _pageController = PageController();
   final WishlistService _wishlistService = WishlistService();
+  
+  List<Product> _brandRecommendations = [];
+  bool _isLoadingBrandRecommendations = false;
+  final Map<String, PageController> _recommendationPageControllers = {};
 
   @override
   void initState() {
     super.initState();
     _checkWishlistStatus();
+    _loadBrandRecommendations();
     _pageController.addListener(() {
       final page = _pageController.page?.round() ?? 0;
       if (_currentImageIndex != page) {
@@ -93,6 +100,9 @@ class _ProductScreenState extends State<ProductScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    for (var controller in _recommendationPageControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -104,6 +114,17 @@ class _ProductScreenState extends State<ProductScreen> {
         title: '',
         showBackButton: true,
         actions: [
+          IconButton(
+            icon: const Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
+            color: Colors.black,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SearchScreen()),
+              );
+            },
+            splashRadius: 20,
+          ),
           IconButton(
             icon: Icon(
               _isFavorite
@@ -145,6 +166,8 @@ class _ProductScreenState extends State<ProductScreen> {
                 _buildProductDetails(),
                 const SizedBox(height: 32),
                 _buildDescription(),
+                const SizedBox(height: 40),
+                _buildBrandRecommendations(),
                 const SizedBox(height: 120),
               ],
             ),
@@ -156,11 +179,13 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _buildProductImages() {
-    return Column(
-      children: [
-        SizedBox(
-          height: 550,
-          child: PageView.builder(
+    final double imageHeight =
+        (MediaQuery.of(context).size.height * 0.6).clamp(0.0, 450.0);
+    return SizedBox(
+      height: imageHeight,
+      child: Stack(
+        children: [
+          PageView.builder(
             controller: _pageController,
             itemCount: widget.product.images.length,
             itemBuilder: (context, index) {
@@ -175,7 +200,7 @@ class _ProductScreenState extends State<ProductScreen> {
                       child: CircularProgressIndicator(
                         value: loadingProgress.expectedTotalBytes != null
                             ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
+                                loadingProgress.expectedTotalBytes!
                             : null,
                         strokeWidth: 1.2,
                         color: Colors.black,
@@ -195,29 +220,49 @@ class _ProductScreenState extends State<ProductScreen> {
               );
             },
           ),
-        ),
-        if (widget.product.images.length > 1) ...[
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              widget.product.images.length,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: _currentImageIndex == index ? 20 : 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: _currentImageIndex == index
-                      ? Colors.black
-                      : Colors.black.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(3),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 120,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.3),
+                  ],
                 ),
               ),
             ),
           ),
+          if (widget.product.images.length > 1)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 24,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.product.images.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.only(right: 6),
+                    height: 2,
+                    width: _currentImageIndex == index ? 24 : 8,
+                    decoration: BoxDecoration(
+                      color: Colors.white
+                          .withOpacity(_currentImageIndex == index ? 1.0 : 0.4),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
-      ],
+      ),
     );
   }
 
@@ -391,6 +436,88 @@ class _ProductScreenState extends State<ProductScreen> {
     );
   }
 
+  Future<void> _loadBrandRecommendations() async {
+    setState(() => _isLoadingBrandRecommendations = true);
+    try {
+      final products = await ProductService().getBrandRecommendations(widget.product.id);
+      if (mounted) {
+        setState(() {
+          _brandRecommendations = products;
+          _isLoadingBrandRecommendations = false;
+        });
+        for (final p in products) {
+          _recommendationPageControllers.putIfAbsent(p.id, () => PageController());
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingBrandRecommendations = false);
+      }
+    }
+  }
+
+  Widget _buildBrandRecommendations() {
+    if (_isLoadingBrandRecommendations) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20.0),
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+        ),
+      );
+    }
+
+    if (_brandRecommendations.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Text(
+            'MORE FROM ${widget.product.brand.toUpperCase()}',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 1.5,
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          height: 320,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: _brandRecommendations.length,
+            itemBuilder: (context, index) {
+              final product = _brandRecommendations[index];
+              return Container(
+                width: 200,
+                margin: const EdgeInsets.only(right: 16),
+                child: ProductCard(
+                  product: product,
+                  isListView: false,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProductScreen(product: product),
+                      ),
+                    );
+                  },
+                  pageController: _recommendationPageControllers[product.id],
+                  // We can add wishlist functionality here if needed, 
+                  // but for now let's keep it simple or reuse existing logic if accessible
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildBottomBar() {
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -466,7 +593,7 @@ class _ProductScreenState extends State<ProductScreen> {
                 ),
                 const SizedBox(width: 12),
                 const Text(
-                  'BUY NOW ON MYNTRA',
+                  'BUY NOW',
                   style: TextStyle(
                     letterSpacing: 2.0,
                     fontSize: 13,

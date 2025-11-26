@@ -34,12 +34,16 @@ class _SplashScreenState extends State<SplashScreen>
   bool _showSplash = true;
   bool _appInitialized = false;
 
+  static bool hasShown = false;
+
   @override
   void initState() {
     super.initState();
     _initializeUI();
     _initApp();
-    _initializeVideo();
+    if (!hasShown) {
+      _initializeVideo();
+    }
   }
 
   Future<void> _initApp() async {
@@ -66,13 +70,21 @@ class _SplashScreenState extends State<SplashScreen>
       if (mounted) {
         _checkAuth();
         setState(() => _appInitialized = true);
-        _tryNavigate();
+        if (hasShown) {
+          setState(() => _showSplash = false);
+        } else {
+          _tryNavigate();
+        }
       }
     } catch (e) {
       debugPrint('App initialization failed: $e');
       if (mounted) {
         setState(() => _appInitialized = true);
-        _tryNavigate();
+        if (hasShown) {
+          setState(() => _showSplash = false);
+        } else {
+          _tryNavigate();
+        }
       }
     }
   }
@@ -181,6 +193,7 @@ class _SplashScreenState extends State<SplashScreen>
   void _onVideoComplete() {
     if (!mounted || _videoCompleted) return;
 
+    hasShown = true;
     setState(() => _videoCompleted = true);
     _tryNavigate();
   }

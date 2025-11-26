@@ -14,6 +14,8 @@ import 'product_screen.dart';
 import 'search_results_screen.dart';
 import 'color_combo_list_screen.dart';
 import '../widgets/loader.dart';
+import '../widgets/custom_refresh_indicator.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -50,11 +52,27 @@ class _HomeScreenState extends State<HomeScreen> {
   final Map<String, PageController> _newArrivalsPageControllers = {};
   final Set<String> _homeWishlist = {};
 
+  final ScrollController _scrollController = ScrollController();
+  int _page = 1;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  static const int _limit = 10;
+
   @override
   void initState() {
     super.initState();
     _outfitPageController = PageController(initialPage: _currentOutfitPage);
+    _scrollController.addListener(_scrollListener);
     _loadHomeData();
+  }
+
+  void _scrollListener() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!_isLoadingMore && _hasMore) {
+        _loadMoreNewArrivals();
+      }
+    }
   }
 
   Future<void> _loadHomeData() async {
@@ -244,18 +262,19 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _isLoadingNew = true;
         _newArrivalsError = null;
+        _page = 1;
       });
 
-      final products = await _productService.getProducts(limit: 6);
+      final products = await _productService.getProducts(page: 1, limit: _limit);
 
       if (!mounted) return;
 
       setState(() {
         _newArrivals = products;
         _isLoadingNew = false;
+        _hasMore = products.length >= _limit;
       });
 
-      // Initialize page controllers for swipeable images
       for (final p in products) {
         _newArrivalsPageControllers.putIfAbsent(p.id, () => PageController());
       }
@@ -269,10 +288,42 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _loadMoreNewArrivals() async {
+    if (_isLoadingMore) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final nextPage = _page + 1;
+      final products = await _productService.getProducts(page: nextPage, limit: _limit);
+
+      if (!mounted) return;
+
+      setState(() {
+        _newArrivals.addAll(products);
+        _page = nextPage;
+        _hasMore = products.length >= _limit;
+        _isLoadingMore = false;
+      });
+
+      for (final p in products) {
+        _newArrivalsPageControllers.putIfAbsent(p.id, () => PageController());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMore = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _stopOutfitCarousel();
     _outfitPageController.dispose();
+    _scrollController.dispose();
 
     // Dispose all product page controllers
     for (var controller in _trendingPageControllers.values) {
@@ -287,6 +338,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final double outfitHeight = (size.height * 0.55).clamp(480.0, 600.0);
+    final int gridCrossAxisCount = (size.width / 180).floor().clamp(2, 4);
+
     return Scaffold(
       appBar: AestheticAppBar(
         title: 'MEGG',
@@ -306,23 +361,72 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: _isScreenLoading
           ? const Center(child: Loader(showCaption: true))
-          : SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          : CustomRefreshIndicator(
+              onRefresh: _loadHomeData,
+              child: CustomScrollView(
+                controller: _scrollController,
+                slivers: [
                   if (_shouldShowDailyOutfits()) ...[
-                    _buildDailyOutfitSection(context),
-                    const SizedBox(height: 32),
+                    SliverToBoxAdapter(
+                        child: _buildDailyOutfitSection(context,
+                            height: outfitHeight)),
+                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   ],
-                  _buildCategorySection(context),
-                  const SizedBox(height: 32),
+                  SliverToBoxAdapter(child: _buildCategorySection(context)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   if (_shouldShowTrending()) ...[
-                    _buildFeaturedProducts(context),
-                    const SizedBox(height: 32),
+                    SliverToBoxAdapter(
+                        child: _buildFeaturedProducts(context)),
+                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   ],
                   if (_shouldShowNewArrivals()) ...[
-                    _buildNewArrivals(context),
-                    const SizedBox(height: 24),
+                    SliverToBoxAdapter(
+                        child: _buildNewArrivalsHeader(context)),
+                    const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      sliver: SliverGrid(
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: gridCrossAxisCount,
+                          childAspectRatio: 0.65,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 16,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final product = _newArrivals[index];
+                            return ProductCard(
+                              product: product,
+                              isListView: false,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        ProductScreen(product: product),
+                                  ),
+                                );
+                              },
+                              isWishlisted:
+                                  _homeWishlist.contains(product.id),
+                              pageController:
+                                  _newArrivalsPageControllers[product.id],
+                              onWishlistToggle: _handleWishlistToggle,
+                            );
+                          },
+                          childCount: _newArrivals.length,
+                        ),
+                      ),
+                    ),
+                    if (_isLoadingMore)
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: Loader(size: 20)),
+                        ),
+                      ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
                   ],
                 ],
               ),
@@ -348,9 +452,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _newArrivals.isNotEmpty;
   }
 
-  Widget _buildDailyOutfitSection(BuildContext context) {
+  Widget _buildDailyOutfitSection(BuildContext context,
+      {required double height}) {
     return SizedBox(
-      height: 550,
+      height: height,
       child: Builder(
         builder: (context) {
           return Stack(
@@ -520,73 +625,82 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     ];
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'SHOP BY COLOR COMBO',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 2.5,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: colorGroups.map((group) {
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ColorComboListScreen(
-                        groupType: group['group'] as String,
-                      ),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'SHOP BY COLOR COMBO',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 2.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: colorGroups.map((group) {
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ColorComboListScreen(
+                            groupType: group['group'] as String,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Colors.black.withOpacity(0.15),
+                              width: 1,
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              group['icon'] as IconData,
+                              size: 28,
+                              color: Colors.black.withOpacity(0.8),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          group['name'] as String,
+                          style: TextStyle(
+                            fontSize: 10,
+                            letterSpacing: 1.2,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
                     ),
                   );
-                },
-                child: Column(
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.black.withOpacity(0.15),
-                          width: 1,
-                        ),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          group['icon'] as IconData,
-                          size: 28,
-                          color: Colors.black.withOpacity(0.8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      group['name'] as String,
-                      style: TextStyle(
-                        fontSize: 10,
-                        letterSpacing: 1.2,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
+                }).toList(),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildFeaturedProducts(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final double itemWidth = (size.width * 0.45).clamp(160.0, 220.0);
+    final double height = itemWidth * 1.6;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -634,7 +748,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 320,
+          height: height,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -642,8 +756,8 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (context, index) {
               final product = _trendingProducts[index];
               return SizedBox(
-                width: 200,
-                height: 320,
+                width: itemWidth,
+                height: height,
                 child: Container(
                   margin: const EdgeInsets.only(right: 12),
                   child: ProductCard(
@@ -670,86 +784,48 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNewArrivals(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            children: [
-              const Text(
-                'NEW ARRIVALS',
+  Widget _buildNewArrivalsHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        children: [
+          const Text(
+            'NEW ARRIVALS',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 2.5,
+            ),
+          ),
+          const Spacer(),
+          if (_newArrivals.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SearchResultsScreen(
+                      initialQuery: 'New Arrivals',
+                      initialProducts: _newArrivals,
+                    ),
+                  ),
+                );
+              },
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                foregroundColor: Colors.grey[700],
+              ),
+              child: const Text(
+                'VIEW ALL',
                 style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 2.5,
+                  fontSize: 10,
+                  letterSpacing: 1.8,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
-              const Spacer(),
-              if (_newArrivals.isNotEmpty)
-                TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SearchResultsScreen(
-                          initialQuery: 'New Arrivals',
-                          initialProducts: _newArrivals,
-                        ),
-                      ),
-                    );
-                  },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    foregroundColor: Colors.grey[700],
-                  ),
-                  child: const Text(
-                    'VIEW ALL',
-                    style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 1.8,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.65,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 16,
             ),
-            itemCount: _newArrivals.length,
-            itemBuilder: (context, index) {
-              final product = _newArrivals[index];
-              return ProductCard(
-                product: product,
-                isListView: false,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ProductScreen(product: product),
-                    ),
-                  );
-                },
-                isWishlisted: _homeWishlist.contains(product.id),
-                pageController: _newArrivalsPageControllers[product.id],
-                onWishlistToggle: _handleWishlistToggle,
-              );
-            },
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

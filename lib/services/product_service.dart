@@ -131,6 +131,21 @@ class ProductService {
   }
 
 
+  Future<List<Product>> getBrandRecommendations(String productId) async {
+    try {
+      final response = await _apiClient.get('/products/$productId/brand-recommendations');
+      final data = response['data'];
+
+      if (data is List) {
+        return data.map((json) => Product.fromJson(json)).toList();
+      }
+
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch brand recommendations: ${e.toString()}');
+    }
+  }
+
   Future<void> recordProductClick(String productId) async {
     try {
       await _apiClient.post(
