@@ -6,6 +6,8 @@ import '../models/product.dart';
 import '../services/product_service.dart';
 import '../services/wishlist_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
+import '../services/auth_service.dart';
+import '../widgets/login_required_dialog.dart';
 import '../widgets/product_widget.dart';
 
 class ProductScreen extends StatefulWidget {
@@ -20,7 +22,7 @@ class ProductScreen extends StatefulWidget {
 class _ProductScreenState extends State<ProductScreen> {
   bool _isFavorite = false;
   int _currentImageIndex = 0;
-  final PageController _pageController = PageController();
+  late PageController _pageController;
   final WishlistService _wishlistService = WishlistService();
   
   List<Product> _productRecommendations = [];
@@ -30,12 +32,21 @@ class _ProductScreenState extends State<ProductScreen> {
   @override
   void initState() {
     super.initState();
+    // Start at a large index to allow infinite scrolling in both directions
+    final initialPage = widget.product.images.isNotEmpty 
+        ? widget.product.images.length * 1000 
+        : 0;
+    _pageController = PageController(initialPage: initialPage);
+    
     _checkWishlistStatus();
     _loadProductRecommendations();
     _pageController.addListener(() {
       final page = _pageController.page?.round() ?? 0;
-      if (_currentImageIndex != page) {
-        setState(() => _currentImageIndex = page);
+      final index = widget.product.images.isNotEmpty 
+          ? page % widget.product.images.length 
+          : 0;
+      if (_currentImageIndex != index) {
+        setState(() => _currentImageIndex = index);
       }
     });
   }
@@ -52,6 +63,14 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Future<void> _toggleWishlist() async {
+    if (!AuthService().isAuthenticated) {
+      showDialog(
+        context: context,
+        builder: (context) => const LoginRequiredDialog(),
+      );
+      return;
+    }
+
     final wasFavorite = _isFavorite;
     setState(() => _isFavorite = !wasFavorite);
 
@@ -187,12 +206,13 @@ class _ProductScreenState extends State<ProductScreen> {
         children: [
           PageView.builder(
             controller: _pageController,
-            itemCount: widget.product.images.length,
+            // itemCount removed for infinite scrolling
             itemBuilder: (context, index) {
+              final imageIndex = index % widget.product.images.length;
               return Container(
                 color: const Color(0xFFF8F8F8),
                 child: Image.network(
-                  widget.product.images[index],
+                  widget.product.images[imageIndex],
                   fit: BoxFit.cover,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
@@ -225,15 +245,17 @@ class _ProductScreenState extends State<ProductScreen> {
             right: 0,
             bottom: 0,
             height: 120,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.3),
-                  ],
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.3),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -243,19 +265,21 @@ class _ProductScreenState extends State<ProductScreen> {
               left: 0,
               right: 0,
               bottom: 24,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  widget.product.images.length,
-                  (index) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.only(right: 6),
-                    height: 2,
-                    width: _currentImageIndex == index ? 24 : 8,
-                    decoration: BoxDecoration(
-                      color: Colors.white
-                          .withOpacity(_currentImageIndex == index ? 1.0 : 0.4),
-                      borderRadius: BorderRadius.circular(1),
+              child: IgnorePointer(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    widget.product.images.length,
+                    (index) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.only(right: 6),
+                      height: 2,
+                      width: _currentImageIndex == index ? 24 : 8,
+                      decoration: BoxDecoration(
+                        color: Colors.white
+                            .withOpacity(_currentImageIndex == index ? 1.0 : 0.4),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
                     ),
                   ),
                 ),

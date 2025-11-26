@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
+import '../services/auth_service.dart';
+import 'login_required_dialog.dart';
 
 // ============================================================================
 // UNIVERSAL PRODUCT GRID
@@ -260,6 +262,14 @@ class _ProductCardState extends State<ProductCard>
   }
 
   void _handleDoubleTap() {
+    if (!AuthService().isAuthenticated) {
+      showDialog(
+        context: context,
+        builder: (context) => const LoginRequiredDialog(),
+      );
+      return;
+    }
+
     if (widget.onDoubleTap != null) {
       widget.onDoubleTap!();
     }
@@ -275,6 +285,14 @@ class _ProductCardState extends State<ProductCard>
   }
 
   void _handleWishlistTap() {
+    if (!AuthService().isAuthenticated) {
+      showDialog(
+        context: context,
+        builder: (context) => const LoginRequiredDialog(),
+      );
+      return;
+    }
+
     if (widget.onWishlistToggle != null) {
       widget.onWishlistToggle!(widget.product.id);
     }

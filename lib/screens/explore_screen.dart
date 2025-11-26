@@ -435,22 +435,22 @@ class _ExploreScreenState extends State<ExploreScreen>
       {'name': 'Skincare', 'image': 'assets/category/skin care.png'},
       {'name': 'Perfume', 'image': 'assets/category/perfume .jpg'},
       {'name': 'Shirt', 'image': 'assets/category/shirt.jpg'},
-      {'name': 'Trackpants', 'image': 'assets/category/track pants.jpg'},
-      {'name': 'Hoodies', 'image': 'assets/category/hoodies.jpg'},
+      {'name': 'Trackpants', 'image': 'assets/category/trackpants.jpg'},
+      {'name': 'Hoodies', 'image': 'assets/category/hoodies .jpg'},
       {'name': 'Sweater', 'image': 'assets/category/sweater.jpg'},
       {'name': 'Sweatshirt', 'image': 'assets/category/sweatshirt.jpg'},
       {'name': 'Tshirt', 'image': 'assets/category/tshirt.jpg'},
 
       {'name': 'Accesories', 'image': 'assets/category/accessories.jpg'},
-      {'name': 'Innerwear', 'image': 'assets/category/innerwear.png'},
+      {'name': 'Innerwear', 'image': 'assets/category/innerwear.jpg'},
 
-      {'name': 'Sports Wear', 'image': 'assets/category/sports.png'},
-      {'name': 'Office Wear', 'image': 'assets/category/office .png'},
+      {'name': 'Sports Wear', 'image': 'assets/category/sports.jpg'},
+      {'name': 'Office Wear', 'image': 'assets/category/formals.jpg'},
 
-      {'name': 'Traditional', 'image': 'assets/category/traditional.png'},
+      {'name': 'Traditional', 'image': 'assets/category/traditional.jpg'},
       {
         'name': 'Daily Essentials',
-        'image': 'assets/category/daily essentials .png',
+        'image': 'assets/category/daily essentials .jpg',
       },
     ];
 
