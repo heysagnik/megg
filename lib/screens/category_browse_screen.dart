@@ -26,6 +26,121 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
   final SearchService _searchService = SearchService();
   final WishlistService _wishlistService = WishlistService();
 
+  // Category to subcategories mapping
+  static const Map<String, List<String>> _categorySubcategories = {
+    'Jacket': [
+      'Puffer',
+      'Leather',
+      'Varsity',
+      'Bomber',
+      'Biker',
+      'Half Jacket',
+      'Casual Jacket',
+      'Denim Jacket',
+      'Wind-cheater',
+    ],
+    'Hoodies': ['Zip Hoodie', 'Pullover Hoodie'],
+    'Sweater': [
+      'V Neck Sweater',
+      'Round Neck Sweater',
+      'Turtle Neck Sweater',
+      'Polo Neck Sweater',
+      'Sweater Vest',
+      'Cardigan',
+    ],
+    'Sweatshirt': [
+      'Oversized Sweatshirt',
+      'Graphic Sweatshirt',
+      'Normal Sweatshirt',
+    ],
+    'Shirt': [
+      'Check Shirt',
+      'Striped Shirt',
+      'Printed Shirt',
+      'Linen Shirt',
+      'Textured Shirt',
+      'Half Shirt',
+      'Solid Shirt',
+      'Shacket',
+      'Formal Shirt',
+      'Cuban Shirt',
+    ],
+    'Jeans': [
+      'Wide Leg Jeans',
+      'Straight Fit Jeans',
+      'Cargo Jeans',
+      'Linen Pants',
+      'Bootcut Jeans',
+      'Formal Pants',
+      'Chinos',
+    ],
+    'Trackpants': [
+      'Baggy Trackpants',
+      'Cargo Trackpants',
+      'Straight Fit Trackpants',
+    ],
+    'Shoes': [
+      'Sneakers',
+      'Sports Shoes',
+      'Walking Shoes',
+      'Clogs',
+      'Boots',
+      'Formal Shoes',
+      'Loafers',
+      'Canvas Shoes',
+    ],
+    'Tshirt': [
+      'Polo Tshirt',
+      'Oversized Tshirt',
+      'Full Sleeve Tshirt',
+      'Gym Tshirt',
+      'V Neck Tshirt',
+      'Round Neck Tshirt',
+      'Printed Tshirt',
+      'Normal Tshirt',
+    ],
+    'Mens Accessories': [
+      'Bags',
+      'Caps',
+      'Watches',
+      'Tie',
+      'Belt',
+      'Sunglasses',
+      'Rings',
+      'Lockets',
+    ],
+    'Sports': [
+      'Sports Shorts',
+      'Sports Jacket',
+      'Socks',
+      'Sports Shoes General',
+      'Football Shoes',
+      'Badminton Shoes',
+      'Gym Tee',
+    ],
+    'Office wear': [
+      'Formal Pants Office',
+      'Formal Shirts Office',
+      'Suits',
+      'Tuxedo',
+      'Formal Shoes Office',
+      'Loafers Office',
+      'Blazers',
+      'Ties & Pocket Squares',
+    ],
+    'Skin care': ['Face Wash', 'Moisturiser', 'Cleanser', 'Sunscreen', 'Serum'],
+    'Traditional': [
+      'Kurta',
+      'Koti',
+      'Pyjama',
+      'Short Kurta',
+      'Blazer Traditional',
+      'Kurta Set',
+      'Indo-western',
+    ],
+    'Perfume': ['EDT', 'EDC', 'EDP'],
+  };
+
   List<Product> _products = [];
   List<Map<String, dynamic>> _banners = [];
 
@@ -41,7 +156,9 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
 
   // Optional simple filters (color only for now)
   String? _selectedColor;
+  String? _selectedSubcategory;
   List<String> _availableColors = [];
+  List<String> _availableSubcategories = [];
 
   // UI controllers
   final Map<String, PageController> _pageControllers = {};
@@ -50,6 +167,8 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
   @override
   void initState() {
     super.initState();
+    // Initialize subcategories based on category
+    _availableSubcategories = _categorySubcategories[widget.category] ?? [];
     _fetch(page: 1);
     _loadWishlist();
   }
@@ -121,6 +240,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
     try {
       final result = await _searchService.browseCategory(
         category: widget.category,
+        subcategory: _selectedSubcategory,
         color: _selectedColor,
         sort: _mapSortOptionToParam(_sortBy),
         page: page,
@@ -182,7 +302,9 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
   @override
   Widget build(BuildContext context) {
     final title = widget.category.toUpperCase();
-    final activeFilterCount = _selectedColor == null ? 0 : 1;
+    int activeFilterCount = 0;
+    if (_selectedColor != null) activeFilterCount++;
+    if (_selectedSubcategory != null) activeFilterCount++;
 
     return Scaffold(
       appBar: AestheticAppBar(
@@ -202,7 +324,22 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(children: [Expanded(child: _buildBody())]),
+      body: Column(
+        children: [
+          if (_availableSubcategories.isNotEmpty)
+            SubcategoryFilterBar(
+              subcategories: _availableSubcategories,
+              selectedSubcategory: _selectedSubcategory,
+              onSubcategorySelected: (subcategory) {
+                setState(() {
+                  _selectedSubcategory = subcategory;
+                });
+                _fetch(page: 1);
+              },
+            ),
+          Expanded(child: _buildBody()),
+        ],
+      ),
       bottomNavigationBar: FilterSortBar(
         sortBy: _sortBy,
         resultCount: _totalResults ?? _products.length,
@@ -554,7 +691,6 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
               _buildSortOption('Newest'),
               _buildSortOption('Price: Low to High'),
               _buildSortOption('Price: High to Low'),
-              _buildSortOption('Most Clicked'),
               const SizedBox(height: 16),
             ],
           ),
@@ -622,6 +758,7 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
                               });
                               setState(() {
                                 _selectedColor = null;
+                                _selectedSubcategory = null;
                               });
                               Navigator.pop(context);
                               _fetch(page: 1);
@@ -637,6 +774,34 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
                           ),
                         ],
                       ),
+                      if (_availableSubcategories.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        const Text(
+                          'SUBCATEGORY',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _availableSubcategories
+                              .map(
+                                (subcategory) => _buildFilterChip(
+                                  subcategory,
+                                  _selectedSubcategory,
+                                  (s) {
+                                    setModalState(() {});
+                                    setState(() => _selectedSubcategory = s);
+                                  },
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       const Text(
                         'COLOR',
@@ -728,6 +893,36 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
         ),
         child: Text(
           color.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.8,
+            color: isSelected ? Colors.white : Colors.black,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(
+    String label,
+    String? selectedValue,
+    Function(String?) onSelect,
+  ) {
+    final isSelected = selectedValue == label;
+    return GestureDetector(
+      onTap: () => onSelect(isSelected ? null : label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.black : Colors.transparent,
+          border: Border.all(
+            color: isSelected ? Colors.black : Colors.black.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label.toUpperCase(),
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,

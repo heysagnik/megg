@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:megg/screens/search_screen.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:async';
 import '../models/product.dart';
 import '../services/product_service.dart';
 import '../services/wishlist_service.dart';
+import '../services/cache_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../services/auth_service.dart';
 import '../widgets/login_required_dialog.dart';
@@ -23,8 +25,9 @@ class _ProductScreenState extends State<ProductScreen> {
   bool _isFavorite = false;
   int _currentImageIndex = 0;
   late PageController _pageController;
+  Timer? _autoSlideTimer;
   final WishlistService _wishlistService = WishlistService();
-  
+
   List<Product> _productRecommendations = [];
   bool _isLoadingProductRecommendations = false;
   final Map<String, PageController> _recommendationPageControllers = {};
@@ -32,34 +35,47 @@ class _ProductScreenState extends State<ProductScreen> {
   @override
   void initState() {
     super.initState();
-    // Start at a large index to allow infinite scrolling in both directions
-    final initialPage = widget.product.images.isNotEmpty 
-        ? widget.product.images.length * 1000 
-        : 0;
-    _pageController = PageController(initialPage: initialPage);
-    
+    _pageController = PageController();
     _checkWishlistStatus();
     _loadProductRecommendations();
-    _pageController.addListener(() {
-      final page = _pageController.page?.round() ?? 0;
-      final index = widget.product.images.isNotEmpty 
-          ? page % widget.product.images.length 
-          : 0;
-      if (_currentImageIndex != index) {
-        setState(() => _currentImageIndex = index);
-      }
+    _saveToRecentlyViewed();
+    _startAutoSlide();
+  }
+
+  void _startAutoSlide() {
+    if (widget.product.images.length <= 1) return;
+
+    _autoSlideTimer?.cancel();
+    _autoSlideTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_pageController.hasClients) return;
+
+      final nextIndex = (_currentImageIndex + 1) % widget.product.images.length;
+      _pageController.animateToPage(
+        nextIndex,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
     });
+  }
+
+  void _stopAutoSlide() {
+    _autoSlideTimer?.cancel();
+    _autoSlideTimer = null;
+  }
+
+  Future<void> _saveToRecentlyViewed() async {
+    try {
+      await CacheService().addRecentlyViewedProduct(widget.product.toJson());
+    } catch (_) {}
   }
 
   Future<void> _checkWishlistStatus() async {
     try {
-      final isInWishlist = await _wishlistService.isInWishlist(widget.product.id);
-      if (mounted) {
-        setState(() => _isFavorite = isInWishlist);
-      }
-    } catch (e) {
-      // Silently fail
-    }
+      final isInWishlist = await _wishlistService.isInWishlist(
+        widget.product.id,
+      );
+      if (mounted) setState(() => _isFavorite = isInWishlist);
+    } catch (_) {}
   }
 
   Future<void> _toggleWishlist() async {
@@ -80,7 +96,7 @@ class _ProductScreenState extends State<ProductScreen> {
       } else {
         await _wishlistService.addToWishlist(widget.product.id);
       }
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -97,8 +113,7 @@ class _ProductScreenState extends State<ProductScreen> {
           ),
         );
       }
-    } catch (e) {
-      // Revert on error
+    } catch (_) {
       if (mounted) {
         setState(() => _isFavorite = wasFavorite);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -116,8 +131,32 @@ class _ProductScreenState extends State<ProductScreen> {
     }
   }
 
+  Future<void> _loadProductRecommendations() async {
+    setState(() => _isLoadingProductRecommendations = true);
+    try {
+      final products = await ProductService().getProductRecommendations(
+        widget.product.id,
+      );
+      if (mounted) {
+        setState(() {
+          _productRecommendations = products;
+          _isLoadingProductRecommendations = false;
+        });
+        for (final p in products) {
+          _recommendationPageControllers.putIfAbsent(
+            p.id,
+            () => PageController(),
+          );
+        }
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingProductRecommendations = false);
+    }
+  }
+
   @override
   void dispose() {
+    _stopAutoSlide();
     _pageController.dispose();
     for (var controller in _recommendationPageControllers.values) {
       controller.dispose();
@@ -136,12 +175,10 @@ class _ProductScreenState extends State<ProductScreen> {
           IconButton(
             icon: const Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
             color: Colors.black,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SearchScreen()),
-              );
-            },
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SearchScreen()),
+            ),
             splashRadius: 20,
           ),
           IconButton(
@@ -159,10 +196,14 @@ class _ProductScreenState extends State<ProductScreen> {
             icon: const Icon(PhosphorIconsRegular.shareNetwork, size: 20),
             color: Colors.black,
             onPressed: () async {
-              final text = 'Check out ${widget.product.name} on MEGG!\n${widget.product.affiliateLink}';
+              final text =
+                  'Check out ${widget.product.name} on MEGG!\n${widget.product.affiliateLink}';
               final url = 'https://wa.me/?text=${Uri.encodeComponent(text)}';
               if (await canLaunchUrl(Uri.parse(url))) {
-                await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                await launchUrl(
+                  Uri.parse(url),
+                  mode: LaunchMode.externalApplication,
+                );
               }
             },
             splashRadius: 20,
@@ -170,102 +211,102 @@ class _ProductScreenState extends State<ProductScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildProductImages(),
-                const SizedBox(height: 32),
-                _buildProductHeader(),
-                const SizedBox(height: 24),
-                _buildColorDisplay(),
-                const SizedBox(height: 40),
-                _buildProductDetails(),
-                const SizedBox(height: 32),
-                _buildDescription(),
-                const SizedBox(height: 40),
-                _buildProductRecommendations(),
-                const SizedBox(height: 120),
-              ],
-            ),
-          ),
-        ],
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildProductImages(),
+            const SizedBox(height: 32),
+            _buildProductHeader(),
+            const SizedBox(height: 24),
+            _buildColorDisplay(),
+            const SizedBox(height: 40),
+            _buildProductDetails(),
+            const SizedBox(height: 32),
+            _buildDescription(),
+            const SizedBox(height: 40),
+            _buildProductRecommendations(),
+            const SizedBox(height: 120),
+          ],
+        ),
       ),
       bottomNavigationBar: _buildBottomBar(),
     );
   }
 
   Widget _buildProductImages() {
-    final double imageHeight =
-        (MediaQuery.of(context).size.height * 0.6).clamp(0.0, 450.0);
-    return SizedBox(
-      height: imageHeight,
-      child: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            // itemCount removed for infinite scrolling
-            itemBuilder: (context, index) {
-              final imageIndex = index % widget.product.images.length;
-              return Container(
-                color: const Color(0xFFF8F8F8),
-                child: Image.network(
-                  widget.product.images[imageIndex],
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
-                        strokeWidth: 1.2,
-                        color: Colors.black,
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Center(
+    final double imageHeight = (MediaQuery.of(context).size.height * 0.6).clamp(
+      0.0,
+      450.0,
+    );
+
+    return GestureDetector(
+      onPanDown: (_) => _stopAutoSlide(),
+      onPanEnd: (_) => _startAutoSlide(),
+      child: SizedBox(
+        height: imageHeight,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              itemCount: widget.product.images.length,
+              onPageChanged: (index) =>
+                  setState(() => _currentImageIndex = index),
+              itemBuilder: (context, index) {
+                return Container(
+                  color: const Color(0xFFF8F8F8),
+                  child: Image.network(
+                    widget.product.images[index],
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                              : null,
+                          strokeWidth: 1.2,
+                          color: Colors.black,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Center(
                       child: Icon(
                         PhosphorIconsRegular.image,
                         size: 64,
                         color: Colors.grey[300],
                       ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: 120,
-            child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.3),
-                    ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 120,
+              child: IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.3),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          if (widget.product.images.length > 1)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 24,
-              child: IgnorePointer(
+            if (widget.product.images.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 24,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(
@@ -276,16 +317,17 @@ class _ProductScreenState extends State<ProductScreen> {
                       height: 2,
                       width: _currentImageIndex == index ? 24 : 8,
                       decoration: BoxDecoration(
-                        color: Colors.white
-                            .withOpacity(_currentImageIndex == index ? 1.0 : 0.4),
+                        color: Colors.white.withOpacity(
+                          _currentImageIndex == index ? 1.0 : 0.4,
+                        ),
                         borderRadius: BorderRadius.circular(1),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -460,26 +502,6 @@ class _ProductScreenState extends State<ProductScreen> {
     );
   }
 
-  Future<void> _loadProductRecommendations() async {
-    setState(() => _isLoadingProductRecommendations = true);
-    try {
-      final products = await ProductService().getProductRecommendations(widget.product.id);
-      if (mounted) {
-        setState(() {
-          _productRecommendations = products;
-          _isLoadingProductRecommendations = false;
-        });
-        for (final p in products) {
-          _recommendationPageControllers.putIfAbsent(p.id, () => PageController());
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoadingProductRecommendations = false);
-      }
-    }
-  }
-
   Widget _buildProductRecommendations() {
     if (_isLoadingProductRecommendations) {
       return const Center(
@@ -525,14 +547,12 @@ class _ProductScreenState extends State<ProductScreen> {
               return ProductCard(
                 product: product,
                 isListView: false,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ProductScreen(product: product),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProductScreen(product: product),
+                  ),
+                ),
                 pageController: _recommendationPageControllers[product.id],
               );
             },
@@ -566,10 +586,7 @@ class _ProductScreenState extends State<ProductScreen> {
           height: 54,
           child: ElevatedButton(
             onPressed: () async {
-              // 1. Record the click
               await ProductService().recordProductClick(widget.product.id);
-
-              // 2. Open the affiliate link
               final url = Uri.parse(widget.product.affiliateLink);
               if (await canLaunchUrl(url)) {
                 await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -606,14 +623,12 @@ class _ProductScreenState extends State<ProductScreen> {
                   'assets/myntra.png',
                   height: 24,
                   width: 24,
-                  color: Colors.white, // Ensure logo is white on black button
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(
-                      PhosphorIconsBold.shoppingBag,
-                      color: Colors.white,
-                      size: 20,
-                    );
-                  },
+                  color: Colors.white,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    PhosphorIconsBold.shoppingBag,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Text(

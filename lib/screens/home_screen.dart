@@ -9,13 +9,13 @@ import '../services/trending_service.dart';
 import '../services/product_service.dart';
 import '../services/outfit_service.dart';
 import '../services/wishlist_service.dart';
+import '../services/cache_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'product_screen.dart';
 import 'search_results_screen.dart';
 import 'color_combo_list_screen.dart';
 import '../widgets/loader.dart';
 import '../widgets/custom_refresh_indicator.dart';
-
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,10 +29,12 @@ class _HomeScreenState extends State<HomeScreen> {
   final ProductService _productService = ProductService();
   final OutfitService _outfitService = OutfitService();
   final WishlistService _wishlistService = WishlistService();
+  final CacheService _cacheService = CacheService();
 
   List<Product> _trendingProducts = [];
   List<Product> _newArrivals = [];
   List<Map<String, dynamic>> _dailyOutfits = [];
+  List<Product> _recentlyViewedProducts = [];
 
   bool _isLoadingTrending = true;
   bool _isLoadingNew = true;
@@ -50,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Product interactions
   final Map<String, PageController> _trendingPageControllers = {};
   final Map<String, PageController> _newArrivalsPageControllers = {};
+  final Map<String, PageController> _recentlyViewedPageControllers = {};
   final Set<String> _homeWishlist = {};
 
   final ScrollController _scrollController = ScrollController();
@@ -84,10 +87,45 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadTrendingProducts(),
       _loadNewArrivals(),
       _loadWishlist(),
+      _loadRecentlyViewed(),
     ]);
 
     if (mounted) {
       setState(() => _isScreenLoading = false);
+    }
+  }
+
+  Future<void> _loadRecentlyViewed() async {
+    try {
+      final recentlyViewedMaps = await _cacheService
+          .getRecentlyViewedProducts();
+
+      if (!mounted) return;
+
+      final products = recentlyViewedMaps
+          .map((map) {
+            try {
+              return Product.fromJson(map);
+            } catch (e) {
+              return null;
+            }
+          })
+          .whereType<Product>()
+          .toList();
+
+      setState(() {
+        _recentlyViewedProducts = products;
+      });
+
+      // Initialize page controllers
+      for (final p in products) {
+        _recentlyViewedPageControllers.putIfAbsent(
+          p.id,
+          () => PageController(),
+        );
+      }
+    } catch (e) {
+      // Silently fail
     }
   }
 
@@ -265,7 +303,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _page = 1;
       });
 
-      final products = await _productService.getProducts(page: 1, limit: _limit);
+      final products = await _productService.getProducts(
+        page: 1,
+        limit: _limit,
+      );
 
       if (!mounted) return;
 
@@ -297,7 +338,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final nextPage = _page + 1;
-      final products = await _productService.getProducts(page: nextPage, limit: _limit);
+      final products = await _productService.getProducts(
+        page: nextPage,
+        limit: _limit,
+      );
 
       if (!mounted) return;
 
@@ -330,6 +374,9 @@ class _HomeScreenState extends State<HomeScreen> {
       controller.dispose();
     }
     for (var controller in _newArrivalsPageControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _recentlyViewedPageControllers.values) {
       controller.dispose();
     }
 
@@ -368,55 +415,57 @@ class _HomeScreenState extends State<HomeScreen> {
                 slivers: [
                   if (_shouldShowDailyOutfits()) ...[
                     SliverToBoxAdapter(
-                        child: _buildDailyOutfitSection(context,
-                            height: outfitHeight)),
+                      child: _buildDailyOutfitSection(
+                        context,
+                        height: outfitHeight,
+                      ),
+                    ),
                     const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   ],
                   SliverToBoxAdapter(child: _buildCategorySection(context)),
                   const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  if (_shouldShowTrending()) ...[
+                  if (_shouldShowRecentlyViewed()) ...[
                     SliverToBoxAdapter(
-                        child: _buildFeaturedProducts(context)),
+                      child: _buildRecentlyViewedSection(context),
+                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                  ],
+                  if (_shouldShowTrending()) ...[
+                    SliverToBoxAdapter(child: _buildFeaturedProducts(context)),
                     const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   ],
                   if (_shouldShowNewArrivals()) ...[
-                    SliverToBoxAdapter(
-                        child: _buildNewArrivalsHeader(context)),
+                    SliverToBoxAdapter(child: _buildNewArrivalsHeader(context)),
                     const SliverToBoxAdapter(child: SizedBox(height: 12)),
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       sliver: SliverGrid(
-                        gridDelegate:
-                            SliverGridDelegateWithFixedCrossAxisCount(
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: gridCrossAxisCount,
                           childAspectRatio: 0.65,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 16,
                         ),
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final product = _newArrivals[index];
-                            return ProductCard(
-                              product: product,
-                              isListView: false,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        ProductScreen(product: product),
-                                  ),
-                                );
-                              },
-                              isWishlisted:
-                                  _homeWishlist.contains(product.id),
-                              pageController:
-                                  _newArrivalsPageControllers[product.id],
-                              onWishlistToggle: _handleWishlistToggle,
-                            );
-                          },
-                          childCount: _newArrivals.length,
-                        ),
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final product = _newArrivals[index];
+                          return ProductCard(
+                            product: product,
+                            isListView: false,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ProductScreen(product: product),
+                                ),
+                              );
+                            },
+                            isWishlisted: _homeWishlist.contains(product.id),
+                            pageController:
+                                _newArrivalsPageControllers[product.id],
+                            onWishlistToggle: _handleWishlistToggle,
+                          );
+                        }, childCount: _newArrivals.length),
                       ),
                     ),
                     if (_isLoadingMore)
@@ -452,8 +501,14 @@ class _HomeScreenState extends State<HomeScreen> {
         _newArrivals.isNotEmpty;
   }
 
-  Widget _buildDailyOutfitSection(BuildContext context,
-      {required double height}) {
+  bool _shouldShowRecentlyViewed() {
+    return _recentlyViewedProducts.isNotEmpty;
+  }
+
+  Widget _buildDailyOutfitSection(
+    BuildContext context, {
+    required double height,
+  }) {
     return SizedBox(
       height: height,
       child: Builder(
@@ -696,6 +751,98 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildRecentlyViewedSection(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final double itemWidth = (size.width * 0.45).clamp(160.0, 220.0);
+    final double height = itemWidth * 1.6;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              const Text(
+                'RECENTLY VIEWED',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 2.5,
+                ),
+              ),
+              const Spacer(),
+              if (_recentlyViewedProducts.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SearchResultsScreen(
+                          initialQuery: 'Recently Viewed',
+                          initialProducts: _recentlyViewedProducts,
+                          hideControls: true,
+                        ),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: Colors.grey[700],
+                  ),
+                  child: const Text(
+                    'VIEW ALL',
+                    style: TextStyle(
+                      fontSize: 10,
+                      letterSpacing: 1.8,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: height,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _recentlyViewedProducts.length,
+            itemBuilder: (context, index) {
+              final product = _recentlyViewedProducts[index];
+              return SizedBox(
+                width: itemWidth,
+                height: height,
+                child: Container(
+                  margin: const EdgeInsets.only(right: 12),
+                  child: ProductCard(
+                    product: product,
+                    isListView: false,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProductScreen(product: product),
+                        ),
+                      ).then((_) {
+                        // Refresh recently viewed when returning
+                        _loadRecentlyViewed();
+                      });
+                    },
+                    isWishlisted: _homeWishlist.contains(product.id),
+                    pageController: _recentlyViewedPageControllers[product.id],
+                    onWishlistToggle: _handleWishlistToggle,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFeaturedProducts(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final double itemWidth = (size.width * 0.45).clamp(160.0, 220.0);
@@ -726,6 +873,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (context) => SearchResultsScreen(
                           initialQuery: 'Trending',
                           initialProducts: _trendingProducts,
+                          hideControls: true,
                         ),
                       ),
                     );
@@ -807,6 +955,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (context) => SearchResultsScreen(
                       initialQuery: 'New Arrivals',
                       initialProducts: _newArrivals,
+                      hideControls: true,
                     ),
                   ),
                 );

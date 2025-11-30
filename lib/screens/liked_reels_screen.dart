@@ -27,6 +27,7 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
   int _currentPageIndex = 0;
   final Map<int, GlobalKey<_ReelItemState>> _reelKeys = {};
   bool _isInitialLoad = true;
+  bool _isMutedDueToCall = false;
 
   @override
   void initState() {
@@ -64,8 +65,11 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      _reelKeys[_currentPageIndex]?.currentState?.pauseVideo();
+      setState(() => _isMutedDueToCall = true);
+      _reelKeys[_currentPageIndex]?.currentState?.setMuted(true);
     } else if (state == AppLifecycleState.resumed) {
+      setState(() => _isMutedDueToCall = false);
+      _reelKeys[_currentPageIndex]?.currentState?.setMuted(false);
       _loadReels();
     }
   }
@@ -305,6 +309,7 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
           onLike: () => _toggleLike(reel.id),
           onShopTap: () => _openLink(reel.affiliateLink),
           isCurrentPage: index == _currentPageIndex,
+          isMutedDueToCall: _isMutedDueToCall,
         );
       },
     );
@@ -409,6 +414,7 @@ class _ReelItem extends StatefulWidget {
   final VoidCallback onLike;
   final VoidCallback onShopTap;
   final bool isCurrentPage;
+  final bool isMutedDueToCall;
 
   const _ReelItem({
     super.key,
@@ -418,6 +424,7 @@ class _ReelItem extends StatefulWidget {
     required this.onLike,
     required this.onShopTap,
     required this.isCurrentPage,
+    this.isMutedDueToCall = false,
   });
 
   @override
@@ -431,6 +438,7 @@ class _ReelItemState extends State<_ReelItem>
   bool _hasError = false;
   double _swipeOffset = 0;
   bool _showLikeAnimation = false;
+  bool _showPauseIndicator = false;
 
   @override
   void initState() {
@@ -475,13 +483,16 @@ class _ReelItemState extends State<_ReelItem>
   void _togglePlayPause() {
     if (_controller == null || !_isInitialized) return;
 
-    setState(() {
-      if (_controller!.value.isPlaying) {
-        _controller!.pause();
-      } else {
-        _controller!.play();
-      }
-    });
+    if (_controller!.value.isPlaying) {
+      _controller!.pause();
+      setState(() => _showPauseIndicator = true);
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) setState(() => _showPauseIndicator = false);
+      });
+    } else {
+      _controller!.play();
+      setState(() => _showPauseIndicator = false);
+    }
   }
 
   void _handleDoubleTap() {
@@ -508,6 +519,18 @@ class _ReelItemState extends State<_ReelItem>
         !_controller!.value.isPlaying) {
       _controller!.play();
       if (mounted) setState(() {});
+    }
+  }
+
+  void setMuted(bool muted) {
+    _controller?.setVolume(muted ? 0.0 : 1.0);
+  }
+
+  @override
+  void didUpdateWidget(_ReelItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isMutedDueToCall != oldWidget.isMutedDueToCall) {
+      _controller?.setVolume(widget.isMutedDueToCall ? 0.0 : 1.0);
     }
   }
 
@@ -548,9 +571,8 @@ class _ReelItemState extends State<_ReelItem>
           else
             _buildLoadingView(),
 
-          if (_isInitialized &&
-              _controller != null &&
-              !_controller!.value.isPlaying)
+          // Pause indicator (shown briefly then hidden)
+          if (_showPauseIndicator)
             Center(
               child: Container(
                 padding: const EdgeInsets.all(20),
@@ -559,7 +581,7 @@ class _ReelItemState extends State<_ReelItem>
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  PhosphorIconsRegular.play,
+                  PhosphorIconsFill.pause,
                   color: Colors.white,
                   size: 48,
                 ),

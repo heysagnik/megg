@@ -17,11 +17,13 @@ import '../widgets/loader.dart';
 class SearchResultsScreen extends StatefulWidget {
   final String initialQuery;
   final List<Product>? initialProducts;
+  final bool hideControls;
 
   const SearchResultsScreen({
     super.key,
     this.initialQuery = '',
     this.initialProducts,
+    this.hideControls = false,
   });
 
   @override
@@ -502,9 +504,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       ),
       body: Column(
         children: [
-          if (_detectedCategory != null && _selectedCategory == null)
+          if (!widget.hideControls &&
+              _detectedCategory != null &&
+              _selectedCategory == null)
             _buildDetectedFiltersInfo(),
-          if (_availableSubcategories.isNotEmpty)
+          if (!widget.hideControls && _availableSubcategories.isNotEmpty)
             SubcategoryFilterBar(
               subcategories: _availableSubcategories,
               selectedSubcategory: _selectedSubcategory,
@@ -528,16 +532,18 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
           Expanded(child: _buildResultsBody()),
         ],
       ),
-      bottomNavigationBar: FilterSortBar(
-        sortBy: _sortBy,
-        resultCount: _totalResults ?? _searchResults.length,
-        isGridView: _isGridView,
-        onSortTap: _showSortBottomSheet,
-        onFilterTap: _showFilterBottomSheet,
-        onViewToggle: () => setState(() => _isGridView = !_isGridView),
-        isSticky: true,
-        activeFilterCount: activeFilterCount,
-      ),
+      bottomNavigationBar: widget.hideControls
+          ? null
+          : FilterSortBar(
+              sortBy: _sortBy,
+              resultCount: _totalResults ?? _searchResults.length,
+              isGridView: _isGridView,
+              onSortTap: _showSortBottomSheet,
+              onFilterTap: _showFilterBottomSheet,
+              onViewToggle: () => setState(() => _isGridView = !_isGridView),
+              isSticky: true,
+              activeFilterCount: activeFilterCount,
+            ),
     );
   }
 
@@ -898,7 +904,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
               _buildSortOption('Newest'),
               _buildSortOption('Price: Low to High'),
               _buildSortOption('Price: High to Low'),
-              _buildSortOption('Most Clicked'),
               const SizedBox(height: 16),
             ],
           ),
@@ -988,6 +993,32 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                           ),
                         ],
                       ),
+                      if (_availableSubcategories.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        const Text(
+                          'SUBCATEGORY',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _availableSubcategories
+                              .map(
+                                (subcategory) => _buildFilterChip(
+                                  subcategory,
+                                  tempSubcategory,
+                                  (s) =>
+                                      setModalState(() => tempSubcategory = s),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       const Text(
                         'COLOR',
@@ -1107,6 +1138,36 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
         ),
         child: Text(
           color.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.8,
+            color: isSelected ? Colors.white : Colors.black,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(
+    String label,
+    String? selectedValue,
+    Function(String?) onSelect,
+  ) {
+    final isSelected = selectedValue == label;
+    return GestureDetector(
+      onTap: () => onSelect(isSelected ? null : label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.black : Colors.transparent,
+          border: Border.all(
+            color: isSelected ? Colors.black : Colors.black.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label.toUpperCase(),
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,

@@ -138,4 +138,47 @@ class CacheService {
       return null;
     }
   }
+
+  // Recently Viewed Products
+  static const String _recentlyViewedKey = 'recently_viewed_products';
+  static const int _maxRecentlyViewed = 10;
+
+  Future<void> addRecentlyViewedProduct(
+    Map<String, dynamic> productJson,
+  ) async {
+    await init();
+
+    final existing = await getRecentlyViewedProducts();
+
+    // Remove if already exists (to move it to front)
+    existing.removeWhere((p) => p['id'] == productJson['id']);
+
+    // Add to front
+    existing.insert(0, productJson);
+
+    // Keep only last 10
+    final trimmed = existing.take(_maxRecentlyViewed).toList();
+
+    await _prefs?.setString(_recentlyViewedKey, jsonEncode(trimmed));
+  }
+
+  Future<List<Map<String, dynamic>>> getRecentlyViewedProducts() async {
+    await init();
+
+    final cachedString = _prefs?.getString(_recentlyViewedKey);
+    if (cachedString == null) return [];
+
+    try {
+      final list = jsonDecode(cachedString) as List;
+      return list.cast<Map<String, dynamic>>();
+    } catch (e) {
+      await _prefs?.remove(_recentlyViewedKey);
+      return [];
+    }
+  }
+
+  Future<void> clearRecentlyViewed() async {
+    await init();
+    await _prefs?.remove(_recentlyViewedKey);
+  }
 }

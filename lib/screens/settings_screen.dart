@@ -51,7 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 });
                 await _notificationService.setNotificationsEnabled(value);
               },
-              activeColor: Colors.black,
+              activeThumbColor: Colors.black,
             ),
           ),
           const SizedBox(height: 40),

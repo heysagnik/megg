@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/product.dart';
+import '../models/reel.dart';
 import '../services/auth_service.dart';
 import '../services/wishlist_service.dart';
+import '../services/reel_service.dart';
 import '../services/cache_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import 'product_screen.dart';
@@ -10,6 +12,8 @@ import 'settings_screen.dart';
 import 'welcome_screen.dart';
 import '../widgets/product_widget.dart';
 import 'liked_reels_screen.dart';
+import 'wishlist_screen.dart';
+import 'favourite_reels_grid_screen.dart';
 import 'dart:async';
 
 class ProfileScreen extends StatefulWidget {
@@ -22,8 +26,10 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
   final WishlistService _wishlistService = WishlistService();
+  final ReelService _reelService = ReelService();
 
   List<Product> _wishlist = [];
+  List<Reel> _likedReels = [];
   String? _errorMessage;
   Map<String, dynamic>? _userProfile;
   final Set<String> _wishlistIds = {};
@@ -123,6 +129,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } finally {
       // Regardless of cache, refresh in background without loaders
       _refreshWishlistInBackground();
+      _refreshLikedReelsInBackground();
+    }
+  }
+
+  Future<void> _refreshLikedReelsInBackground() async {
+    if (!_authService.isAuthenticated) return;
+    try {
+      final reels = await _reelService.getLikedReels();
+      if (!mounted) return;
+      setState(() {
+        _likedReels = reels;
+      });
+    } catch (e) {
+      // Keep showing cached UI on errors
     }
   }
 
@@ -271,29 +291,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       physics: const ClampingScrollPhysics(),
       child: Column(
         children: [
-          const SizedBox(height: 48),
+          const SizedBox(height: 32),
           _buildProfileHeader(),
-          const SizedBox(height: 48),
-          
+          const SizedBox(height: 16),
+
+          // Sign Out / Sign In button right below profile
           if (_authService.isAuthenticated) ...[
-            _buildMenuButton(
-              title: 'FAVOURITE REELS',
-              icon: Icon(PhosphorIconsRegular.heart, size: 20, color: Colors.black),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => LikedReelsScreen()),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
+            _buildSignOutButton(),
           ] else ...[
             _buildSignInButton(),
-            const SizedBox(height: 16),
           ],
 
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
+            padding: const EdgeInsets.symmetric(vertical: 32),
             child: Divider(
               height: 1,
               thickness: 0.5,
@@ -301,23 +311,254 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
+          // Wishlist Section with VIEW ALL
           _buildWishlist(),
-          
-          const SizedBox(height: 32),
-          
+
+          const SizedBox(height: 24),
+
+          // Favourite Reels Section (only for authenticated users)
           if (_authService.isAuthenticated) ...[
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: Divider(
                 height: 1,
                 thickness: 0.5,
                 color: Colors.black.withOpacity(0.08),
               ),
             ),
-            _buildLogoutButton(),
-            const SizedBox(height: 48),
+            const SizedBox(height: 16),
+            _buildFavouriteReelsSection(),
           ],
+
+          const SizedBox(height: 48),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSignOutButton() {
+    return TextButton(
+      onPressed: _handleLogout,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        foregroundColor: Colors.grey[600],
+      ),
+      child: const Text(
+        'SIGN OUT',
+        style: TextStyle(
+          fontSize: 10,
+          letterSpacing: 1.8,
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFavouriteReelsSection() {
+    final size = MediaQuery.of(context).size;
+    final double itemWidth = (size.width * 0.28).clamp(100.0, 140.0);
+    final double itemHeight = itemWidth * 1.6;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              const Text(
+                'FAVOURITE REELS',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 2.5,
+                ),
+              ),
+              const Spacer(),
+              if (_likedReels.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            FavouriteReelsGridScreen(initialReels: _likedReels),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: Colors.grey[700],
+                  ),
+                  child: const Text(
+                    'VIEW ALL',
+                    style: TextStyle(
+                      fontSize: 10,
+                      letterSpacing: 1.8,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_likedReels.isEmpty)
+          _buildEmptyReelsState()
+        else
+          SizedBox(
+            height: itemHeight,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _likedReels.length > 10 ? 10 : _likedReels.length,
+              itemBuilder: (context, index) {
+                final reel = _likedReels[index];
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LikedReelsScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: itemWidth,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(color: Colors.grey[100]),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        reel.thumbnailUrl.isNotEmpty
+                            ? Image.network(
+                                reel.thumbnailUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.grey[200],
+                                    child: Center(
+                                      child: Icon(
+                                        PhosphorIconsRegular.videoCamera,
+                                        size: 24,
+                                        color: Colors.grey[400],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                color: Colors.grey[200],
+                                child: Center(
+                                  child: Icon(
+                                    PhosphorIconsRegular.videoCamera,
+                                    size: 24,
+                                    color: Colors.grey[400],
+                                  ),
+                                ),
+                              ),
+                        // Gradient overlay
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withOpacity(0.6),
+                                ],
+                                stops: const [0.5, 1.0],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Play icon - subtle
+                        Center(
+                          child: Icon(
+                            PhosphorIconsRegular.play,
+                            color: Colors.white.withOpacity(0.9),
+                            size: 20,
+                          ),
+                        ),
+                        // Views count at bottom
+                        Positioned(
+                          bottom: 8,
+                          left: 8,
+                          right: 8,
+                          child: Row(
+                            children: [
+                              Icon(
+                                PhosphorIconsRegular.play,
+                                color: Colors.white.withOpacity(0.9),
+                                size: 10,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                _formatCount(reel.views),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _formatCount(int count) {
+    if (count >= 1000000) {
+      return '${(count / 1000000).toStringAsFixed(1)}M';
+    } else if (count >= 1000) {
+      return '${(count / 1000).toStringAsFixed(1)}K';
+    }
+    return count.toString();
+  }
+
+  Widget _buildEmptyReelsState() {
+    return Padding(
+      padding: const EdgeInsets.all(32.0),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              PhosphorIconsRegular.videoCamera,
+              size: 40,
+              color: Colors.grey[350],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'NO FAVOURITE REELS',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Like reels to see them here',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[600],
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -393,15 +634,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       children: [
         Container(
-          width: 100,
-          height: 100,
+          width: 72,
+          height: 72,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.grey[50],
-            border: Border.all(
-              color: Colors.black.withOpacity(0.08),
-              width: 1,
-            ),
+            border: Border.all(color: Colors.black.withOpacity(0.08), width: 1),
             image: user?.userMetadata?['avatar_url'] != null
                 ? DecorationImage(
                     image: NetworkImage(user!.userMetadata!['avatar_url']),
@@ -414,7 +652,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Text(
                     initials,
                     style: TextStyle(
-                      fontSize: 32,
+                      fontSize: 24,
                       fontWeight: FontWeight.w300,
                       letterSpacing: 2,
                       color: Colors.black,
@@ -423,24 +661,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 )
               : null,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         Text(
           userName.toUpperCase(),
           style: const TextStyle(
-            fontSize: 24,
+            fontSize: 18,
             fontWeight: FontWeight.w300,
-            letterSpacing: 4,
+            letterSpacing: 3,
             color: Colors.black,
           ),
         ),
         if (userEmail.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
-            userEmail.toUpperCase(),
+            userEmail.toLowerCase(),
             style: TextStyle(
-              fontSize: 10,
-              letterSpacing: 1.5,
-              color: Colors.grey[600],
+              fontSize: 11,
+              letterSpacing: 0.5,
+              color: Colors.grey[500],
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -456,56 +694,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
   }
 
-  Widget _buildMenuButton({
-    required String title,
-    required Widget icon,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.black.withOpacity(0.08)),
-            color: Colors.white,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              icon,
-              const SizedBox(width: 16),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 2,
-                  color: Colors.black,
-                ),
-              ),
-              const Spacer(),
-              Icon(
-                PhosphorIconsRegular.caretRight,
-                size: 16,
-                color: Colors.black.withOpacity(0.5),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildWishlist() {
+    final size = MediaQuery.of(context).size;
+    final double itemWidth = (size.width * 0.45).clamp(160.0, 220.0);
+    final double height = itemWidth * 1.6;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
                 'WISHLIST',
@@ -515,34 +714,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   letterSpacing: 2.5,
                 ),
               ),
-              if (_wishlist.isNotEmpty)
+              const Spacer(),
+              if (_wishlist.isNotEmpty) ...[
                 TextButton(
                   onPressed: _clearAllWishlist,
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: Colors.grey[500],
                   ),
-                  child: Text(
-                    'CLEAR ALL',
+                  child: const Text(
+                    'CLEAR',
                     style: TextStyle(
-                      color: Colors.grey[700],
                       fontSize: 10,
                       letterSpacing: 1.8,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            WishlistScreen(initialWishlist: _wishlist),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    foregroundColor: Colors.grey[700],
+                  ),
+                  child: const Text(
+                    'VIEW ALL',
+                    style: TextStyle(
+                      fontSize: 10,
+                      letterSpacing: 1.8,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         if (_wishlist.isEmpty)
           _buildEmptyState()
         else
           SizedBox(
-            height: 300,
+            height: height,
             child: _WishlistHorizontalList(
               products: _wishlist,
               wishlistIds: _wishlistIds,
+              itemWidth: itemWidth,
               onProductTap: (product) {
                 Navigator.push(
                   context,
@@ -603,9 +828,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         },
         child: Container(
           height: 56,
-          decoration: const BoxDecoration(
-            color: Colors.black,
-          ),
+          decoration: const BoxDecoration(color: Colors.black),
           child: const Center(
             child: Text(
               'SIGN IN',
@@ -615,35 +838,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 letterSpacing: 2,
                 color: Colors.white,
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogoutButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: SizedBox(
-        width: double.infinity,
-        height: 52,
-        child: OutlinedButton(
-          onPressed: _handleLogout,
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: Colors.black.withOpacity(0.1), width: 1),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.zero,
-            ),
-            backgroundColor: Colors.white,
-          ),
-          child: Text(
-            'SIGN OUT',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 2,
-              color: Colors.grey[800],
             ),
           ),
         ),
@@ -747,18 +941,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _WishlistHorizontalList extends StatefulWidget {
   final List<Product> products;
   final Set<String> wishlistIds;
+  final double itemWidth;
   final Function(Product) onProductTap;
   final Function(String) onWishlistToggle;
 
   const _WishlistHorizontalList({
     required this.products,
     required this.wishlistIds,
+    required this.itemWidth,
     required this.onProductTap,
     required this.onWishlistToggle,
   });
 
   @override
-  State<_WishlistHorizontalList> createState() => _WishlistHorizontalListState();
+  State<_WishlistHorizontalList> createState() =>
+      _WishlistHorizontalListState();
 }
 
 class _WishlistHorizontalListState extends State<_WishlistHorizontalList> {
@@ -802,16 +999,18 @@ class _WishlistHorizontalListState extends State<_WishlistHorizontalList> {
       itemCount: widget.products.length,
       itemBuilder: (context, index) {
         final product = widget.products[index];
-        return Container(
-          width: 160, // Fixed width for horizontal items
-          margin: const EdgeInsets.only(right: 12),
-          child: ProductCard(
-            product: product,
-            isListView: false,
-            onTap: () => widget.onProductTap(product),
-            isWishlisted: widget.wishlistIds.contains(product.id),
-            pageController: _pageControllers[product.id],
-            onWishlistToggle: widget.onWishlistToggle,
+        return SizedBox(
+          width: widget.itemWidth,
+          child: Container(
+            margin: const EdgeInsets.only(right: 12),
+            child: ProductCard(
+              product: product,
+              isListView: false,
+              onTap: () => widget.onProductTap(product),
+              isWishlisted: widget.wishlistIds.contains(product.id),
+              pageController: _pageControllers[product.id],
+              onWishlistToggle: widget.onWishlistToggle,
+            ),
           ),
         );
       },

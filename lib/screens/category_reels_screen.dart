@@ -29,15 +29,25 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
   String? _errorMessage;
   final Set<String> _viewedReels = {};
   final Set<String> _likedReels = {};
-  final Map<String, int> _likeCounts = {}; // Track real-time like counts
+  final Map<String, int> _likeCounts = {};
   int _currentPageIndex = 0;
-  // Removed _reelKeys as we'll use didUpdateWidget for playback control
+  bool _isMutedDueToCall = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadReels();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _isMutedDueToCall = true;
+    } else if (state == AppLifecycleState.resumed) {
+      _isMutedDueToCall = false;
+    }
   }
 
   @override
@@ -284,6 +294,7 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
           onShopTap: () => _openLink(reel.affiliateLink),
           onShareTap: () => _shareReel(reel),
           isCurrentPage: reelIndex == _currentPageIndex,
+          isMutedDueToCall: _isMutedDueToCall,
         );
       },
       onPageChanged: (index) {
@@ -400,9 +411,9 @@ class _ReelItem extends StatefulWidget {
   final VoidCallback onShopTap;
   final VoidCallback onShareTap;
   final bool isCurrentPage;
+  final bool isMutedDueToCall;
 
   const _ReelItem({
-    super.key,
     required this.reel,
     required this.isLiked,
     required this.likeCount,
@@ -410,6 +421,7 @@ class _ReelItem extends StatefulWidget {
     required this.onShopTap,
     required this.onShareTap,
     required this.isCurrentPage,
+    this.isMutedDueToCall = false,
   });
 
   @override
@@ -423,6 +435,7 @@ class _ReelItemState extends State<_ReelItem>
   bool _hasError = false;
   double _swipeOffset = 0;
   bool _showLikeAnimation = false;
+  bool _showPauseIndicator = false;
   Size? _cachedVideoSize;
 
   @override
@@ -438,6 +451,7 @@ class _ReelItemState extends State<_ReelItem>
       _controller?.dispose();
       _controller = null;
       _isInitialized = false;
+      _showPauseIndicator = false;
       _cachedVideoSize = null;
       _initializeVideo();
     } else if (widget.isCurrentPage != oldWidget.isCurrentPage) {
@@ -446,6 +460,10 @@ class _ReelItemState extends State<_ReelItem>
       } else {
         pauseVideo();
       }
+    }
+
+    if (widget.isMutedDueToCall != oldWidget.isMutedDueToCall) {
+      _controller?.setVolume(widget.isMutedDueToCall ? 0.0 : 1.0);
     }
   }
 
@@ -494,13 +512,16 @@ class _ReelItemState extends State<_ReelItem>
   void _togglePlayPause() {
     if (_controller == null || !_isInitialized) return;
 
-    setState(() {
-      if (_controller!.value.isPlaying) {
-        _controller!.pause();
-      } else {
-        _controller!.play();
-      }
-    });
+    if (_controller!.value.isPlaying) {
+      _controller!.pause();
+      setState(() => _showPauseIndicator = true);
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) setState(() => _showPauseIndicator = false);
+      });
+    } else {
+      _controller!.play();
+      setState(() => _showPauseIndicator = false);
+    }
   }
 
   void _handleDoubleTap() {
@@ -606,10 +627,8 @@ class _ReelItemState extends State<_ReelItem>
             ),
           ),
 
-          // Play/Pause indicator
-          if (_isInitialized &&
-              _controller != null &&
-              !_controller!.value.isPlaying)
+          // Play/Pause indicator (shown briefly then hidden)
+          if (_showPauseIndicator)
             Center(
               child: Container(
                 padding: const EdgeInsets.all(16),
@@ -618,7 +637,7 @@ class _ReelItemState extends State<_ReelItem>
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  PhosphorIconsFill.play,
+                  PhosphorIconsFill.pause,
                   color: Colors.white,
                   size: 48,
                 ),
