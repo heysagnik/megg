@@ -32,6 +32,7 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
   final Map<String, int> _likeCounts = {};
   int _currentPageIndex = 0;
   bool _isMutedDueToCall = false;
+  final Map<int, GlobalKey<_ReelItemState>> _reelKeys = {};
 
   @override
   void initState() {
@@ -44,9 +45,11 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      _isMutedDueToCall = true;
+      setState(() => _isMutedDueToCall = true);
+      _reelKeys[_currentPageIndex]?.currentState?.setMuted(true);
     } else if (state == AppLifecycleState.resumed) {
-      _isMutedDueToCall = false;
+      setState(() => _isMutedDueToCall = false);
+      _reelKeys[_currentPageIndex]?.currentState?.setMuted(false);
     }
   }
 
@@ -286,7 +289,12 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
         final reelIndex = index % _reels.length;
         final reel = _reels[reelIndex];
 
+        if (!_reelKeys.containsKey(reelIndex)) {
+          _reelKeys[reelIndex] = GlobalKey<_ReelItemState>();
+        }
+
         return _ReelItem(
+          key: _reelKeys[reelIndex],
           reel: reel,
           isLiked: _likedReels.contains(reel.id),
           likeCount: _likeCounts[reel.id] ?? reel.likes,
@@ -414,6 +422,7 @@ class _ReelItem extends StatefulWidget {
   final bool isMutedDueToCall;
 
   const _ReelItem({
+    super.key,
     required this.reel,
     required this.isLiked,
     required this.likeCount,
@@ -551,6 +560,10 @@ class _ReelItemState extends State<_ReelItem>
       _controller!.play();
       if (mounted) setState(() {});
     }
+  }
+
+  void setMuted(bool muted) {
+    _controller?.setVolume(muted ? 0.0 : 1.0);
   }
 
   String _formatCount(int count) {

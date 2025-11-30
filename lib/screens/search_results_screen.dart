@@ -560,16 +560,26 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
       return _buildEmptyState();
     }
 
+    // Disable pull-to-refresh when hideControls is true (View All pages)
+    // or when we have initialProducts (pre-populated lists that can't be refreshed via search)
+    final bool disableRefresh =
+        widget.hideControls || widget.initialProducts != null;
+
+    final scrollableContent = NotificationListener<ScrollNotification>(
+      onNotification: _handleScrollNotification,
+      child: _isGridView ? _buildGridView() : _buildListView(),
+    );
+
     return Stack(
       children: [
-        CustomRefreshIndicator(
-          onRefresh: () => _performSearch(_currentQuery, page: 1),
-          color: Colors.black,
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _handleScrollNotification,
-            child: _isGridView ? _buildGridView() : _buildListView(),
+        if (disableRefresh)
+          scrollableContent
+        else
+          CustomRefreshIndicator(
+            onRefresh: () => _performSearch(_currentQuery, page: 1),
+            color: Colors.black,
+            child: scrollableContent,
           ),
-        ),
         if (_isLoadingMore)
           Positioned(
             left: 0,

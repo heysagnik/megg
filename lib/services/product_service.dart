@@ -130,10 +130,11 @@ class ProductService {
     }
   }
 
-
   Future<List<Product>> getProductRecommendations(String productId) async {
     try {
-      final response = await _apiClient.get('/products/$productId/recommendations');
+      final response = await _apiClient.get(
+        '/products/$productId/recommendations',
+      );
       final data = response['data'];
 
       if (data is List) {
@@ -142,7 +143,9 @@ class ProductService {
 
       return [];
     } catch (e) {
-      throw Exception('Failed to fetch product recommendations: ${e.toString()}');
+      throw Exception(
+        'Failed to fetch product recommendations: ${e.toString()}',
+      );
     }
   }
 
@@ -156,6 +159,23 @@ class ProductService {
     } catch (e) {
       // Silently fail for analytics
       debugPrint('Failed to record product click: $e');
+    }
+  }
+
+  /// Fetches color variants for a product
+  Future<List<Product>> getProductVariants(String productId) async {
+    try {
+      final response = await _apiClient.get('/products/$productId/variants');
+      final data = response['data'];
+
+      if (data is List) {
+        return data.map((json) => Product.fromJson(json)).toList();
+      }
+
+      return [];
+    } catch (e) {
+      debugPrint('Failed to fetch product variants: $e');
+      return [];
     }
   }
 }

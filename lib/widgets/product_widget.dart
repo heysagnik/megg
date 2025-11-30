@@ -165,6 +165,8 @@ class _ProductCardState extends State<ProductCard>
   bool _isHovering = false;
   Timer? _autoScrollTimer;
   int _currentImageIndex = 0;
+  bool _isInitialBuild =
+      true; // Track initial build to prevent animation on load
   // Pulse ring removed per request
 
   @override
@@ -221,7 +223,14 @@ class _ProductCardState extends State<ProductCard>
   @override
   void didUpdateWidget(covariant ProductCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Trigger animations when item just became wishlisted
+
+    // Skip animation on initial build - only animate for actual user interactions
+    if (_isInitialBuild) {
+      _isInitialBuild = false;
+      return;
+    }
+
+    // Trigger animations when item just became wishlisted (from user action)
     if (!oldWidget.isWishlisted && widget.isWishlisted) {
       setState(() {
         _showAnimation = true;

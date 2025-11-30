@@ -14,7 +14,8 @@ class WelcomeScreen extends StatefulWidget {
   State<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen> {
+class _WelcomeScreenState extends State<WelcomeScreen>
+    with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   late VideoPlayerController _videoController;
   bool _isVideoInitialized = false;
@@ -27,8 +28,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _setupAuthListener();
     _initializeVideo();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Video is already muted, so no action needed during calls
+    // It will keep playing silently
   }
 
   void _initializeVideo() {
@@ -91,6 +99,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _authSubscription?.cancel();
     _videoController.dispose();
     super.dispose();
@@ -268,11 +277,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
           // Skip Button
           Positioned(
-            top: -10 ,
+            top: -10,
             right: -10,
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(12.0), 
+                padding: const EdgeInsets.all(12.0),
                 child: TextButton(
                   onPressed: _isLoading
                       ? null
@@ -294,7 +303,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       horizontal: 20,
                       vertical: 12,
                     ),
-                    
                   ),
                   child: const Text(
                     'SKIP',
@@ -302,7 +310,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 2.0,
-                      color: Color(0xFFEFEFEF), 
+                      color: Color(0xFFEFEFEF),
                     ),
                   ),
                 ),

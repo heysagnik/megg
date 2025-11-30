@@ -16,15 +16,20 @@ import 'main_navigation.dart';
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
+  // Track if splash was shown in this app session (resets when app is killed)
+  static bool _hasShownInSession = false;
+  // Track if services are already initialized in current session
+  static bool _servicesInitialized = false;
+
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  late AnimationController _slideController;
-  late Animation<Offset> _slideAnimation;
-  late AnimationController _lottieController;
+  AnimationController? _slideController;
+  Animation<Offset>? _slideAnimation;
+  AnimationController? _lottieController;
   Timer? _safetyTimer;
 
   bool _animationCompleted = false;
@@ -33,43 +38,68 @@ class _SplashScreenState extends State<SplashScreen>
   bool _showSplash = true;
   bool _appInitialized = false;
 
-  static bool hasShown = false;
-
   @override
   void initState() {
     super.initState();
-    _initializeUI();
-    _initApp();
-    if (!hasShown) {
+
+    // If splash was already shown in this session (returning from background)
+    if (SplashScreen._hasShownInSession) {
+      _showSplash = false;
+      _animationCompleted = true;
+      _initAppQuick();
+    } else {
+      // Fresh app launch - show splash
+      _initializeUI();
+      _initApp();
       _initializeLottie();
+    }
+  }
+
+  // Quick initialization when returning from background
+  Future<void> _initAppQuick() async {
+    if (!SplashScreen._servicesInitialized) {
+      await _initApp();
+    } else {
+      _checkAuth();
+      if (mounted) {
+        setState(() {
+          _appInitialized = true;
+          _showSplash = false;
+        });
+      }
     }
   }
 
   Future<void> _initApp() async {
     try {
-      await CacheService().init();
+      // Only initialize services if not already done
+      if (!SplashScreen._servicesInitialized) {
+        await CacheService().init();
 
-      try {
-        await dotenv.load(fileName: '.env');
-      } catch (e) {
-        debugPrint('Failed to load .env: $e');
+        try {
+          await dotenv.load(fileName: '.env');
+        } catch (e) {
+          debugPrint('Failed to load .env: $e');
+        }
+
+        await Firebase.initializeApp();
+
+        await Supabase.initialize(
+          url: ApiConfig.supabaseUrl,
+          anonKey: ApiConfig.supabaseAnonKey,
+        );
+
+        AuthService().setupAuthListener();
+        await FCMService().initialize();
+        await NotificationService().initialize();
+
+        SplashScreen._servicesInitialized = true;
       }
-
-      await Firebase.initializeApp();
-
-      await Supabase.initialize(
-        url: ApiConfig.supabaseUrl,
-        anonKey: ApiConfig.supabaseAnonKey,
-      );
-
-      AuthService().setupAuthListener();
-      await FCMService().initialize();
-      await NotificationService().initialize();
 
       if (mounted) {
         _checkAuth();
         setState(() => _appInitialized = true);
-        if (hasShown) {
+        if (SplashScreen._hasShownInSession) {
           setState(() => _showSplash = false);
         } else {
           _tryNavigate();
@@ -78,8 +108,9 @@ class _SplashScreenState extends State<SplashScreen>
     } catch (e) {
       debugPrint('App initialization failed: $e');
       if (mounted) {
+        _checkAuth();
         setState(() => _appInitialized = true);
-        if (hasShown) {
+        if (SplashScreen._hasShownInSession) {
           setState(() => _showSplash = false);
         } else {
           _tryNavigate();
@@ -89,11 +120,15 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _checkAuth() {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (mounted) {
-      setState(() {
-        _isAuthenticated = session != null;
-      });
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (mounted) {
+        setState(() {
+          _isAuthenticated = session != null;
+        });
+      }
+    } catch (e) {
+      _isAuthenticated = false;
     }
   }
 
@@ -113,19 +148,18 @@ class _SplashScreenState extends State<SplashScreen>
     _slideAnimation =
         Tween<Offset>(begin: Offset.zero, end: const Offset(0, -1)).animate(
           CurvedAnimation(
-            parent: _slideController,
+            parent: _slideController!,
             curve: Curves.easeInOutCubic,
           ),
         );
 
-    _slideController.addStatusListener((status) {
+    _slideController!.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         if (mounted) {
           setState(() {
             _showSplash = false;
           });
         }
-        // Reset system UI style for the next screen
         SystemChrome.setSystemUIOverlayStyle(
           const SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
@@ -139,7 +173,7 @@ class _SplashScreenState extends State<SplashScreen>
   void _initializeLottie() {
     _lottieController = AnimationController(vsync: this);
 
-    _lottieController.addStatusListener((status) {
+    _lottieController!.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         _onAnimationComplete();
       }
@@ -149,7 +183,7 @@ class _SplashScreenState extends State<SplashScreen>
   void _onAnimationComplete() {
     if (!mounted || _animationCompleted) return;
 
-    hasShown = true;
+    SplashScreen._hasShownInSession = true;
     setState(() => _animationCompleted = true);
     _tryNavigate();
   }
@@ -157,15 +191,15 @@ class _SplashScreenState extends State<SplashScreen>
   void _tryNavigate() {
     if (_animationCompleted && _appInitialized && !_slideStarted) {
       _slideStarted = true;
-      _slideController.forward();
+      _slideController?.forward();
     }
   }
 
   @override
   void dispose() {
     _safetyTimer?.cancel();
-    _slideController.dispose();
-    _lottieController.dispose();
+    _slideController?.dispose();
+    _lottieController?.dispose();
     super.dispose();
   }
 
@@ -189,45 +223,44 @@ class _SplashScreenState extends State<SplashScreen>
             ),
 
           // The Splash Overlay
-          SlideTransition(
-            position: _slideAnimation,
-            child: GestureDetector(
-              onVerticalDragEnd: (details) {
-                // Detect swipe up to dismiss
-                if (details.primaryVelocity! < -500) {
-                  _onAnimationComplete();
-                }
-              },
-              child: Container(
-                color: Colors.black,
-                child: Stack(
-                  children: [
-                    _buildLottieAnimation(),
-                  ],
+          if (_slideAnimation != null)
+            SlideTransition(
+              position: _slideAnimation!,
+              child: GestureDetector(
+                onVerticalDragEnd: (details) {
+                  if (details.primaryVelocity! < -500) {
+                    _onAnimationComplete();
+                  }
+                },
+                child: Container(
+                  color: Colors.black,
+                  child: Stack(children: [_buildLottieAnimation()]),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
   Widget _buildLottieAnimation() {
+    if (_lottieController == null) return const SizedBox.shrink();
+
     return Center(
       child: Lottie.asset(
         'assets/animation.json',
         controller: _lottieController,
         onLoaded: (composition) {
-          _lottieController
+          _lottieController!
             ..duration = composition.duration
             ..forward();
 
-          // Safety timer in case animation doesn't complete
-          _safetyTimer =
-              Timer(composition.duration + const Duration(seconds: 1), () {
-            if (mounted && !_animationCompleted) _onAnimationComplete();
-          });
+          _safetyTimer = Timer(
+            composition.duration + const Duration(seconds: 1),
+            () {
+              if (mounted && !_animationCompleted) _onAnimationComplete();
+            },
+          );
         },
         fit: BoxFit.contain,
         width: MediaQuery.of(context).size.width * 0.8,

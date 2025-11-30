@@ -32,12 +32,17 @@ class _ProductScreenState extends State<ProductScreen> {
   bool _isLoadingProductRecommendations = false;
   final Map<String, PageController> _recommendationPageControllers = {};
 
+  // Color variants
+  List<Product> _colorVariants = [];
+  bool _isLoadingVariants = false;
+
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
     _checkWishlistStatus();
     _loadProductRecommendations();
+    _loadColorVariants();
     _saveToRecentlyViewed();
     _startAutoSlide();
   }
@@ -151,6 +156,23 @@ class _ProductScreenState extends State<ProductScreen> {
       }
     } catch (_) {
       if (mounted) setState(() => _isLoadingProductRecommendations = false);
+    }
+  }
+
+  Future<void> _loadColorVariants() async {
+    setState(() => _isLoadingVariants = true);
+    try {
+      final variants = await ProductService().getProductVariants(
+        widget.product.id,
+      );
+      if (mounted) {
+        setState(() {
+          _colorVariants = variants;
+          _isLoadingVariants = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingVariants = false);
     }
   }
 
@@ -372,7 +394,9 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _buildColorDisplay() {
-    if (widget.product.color.isEmpty) return const SizedBox.shrink();
+    if (widget.product.color.isEmpty && _colorVariants.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -382,6 +406,7 @@ class _ProductScreenState extends State<ProductScreen> {
           Container(height: 1, color: Colors.black.withOpacity(0.08)),
           const SizedBox(height: 20),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'COLOR',
@@ -394,13 +419,37 @@ class _ProductScreenState extends State<ProductScreen> {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: Text(
-                  widget.product.color,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.3,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.product.color,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    if (_colorVariants.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _buildColorVariants(),
+                    ] else if (_isLoadingVariants) ...[
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        height: 48,
+                        child: Center(
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: Colors.grey[400],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
@@ -409,6 +458,159 @@ class _ProductScreenState extends State<ProductScreen> {
           Container(height: 1, color: Colors.black.withOpacity(0.08)),
         ],
       ),
+    );
+  }
+
+  Widget _buildColorVariants() {
+    // Count of other colors available
+    final otherColorsCount = _colorVariants.length ;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Show available colors count
+        if (otherColorsCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              '$otherColorsCount more ${otherColorsCount == 1 ? 'color' : 'colors'} available',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+        SizedBox(
+          height: 80,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _colorVariants.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final variant = _colorVariants[index];
+              final isSelected = variant.id == widget.product.id;
+              final thumbnailUrl = variant.images.isNotEmpty
+                  ? variant.images.first
+                  : null;
+
+              return GestureDetector(
+                onTap: isSelected
+                    ? null
+                    : () {
+                        Navigator.pushReplacement(
+                          context,
+                          PageRouteBuilder(
+                            pageBuilder: (_, __, ___) =>
+                                ProductScreen(product: variant),
+                            transitionDuration: const Duration(
+                              milliseconds: 200,
+                            ),
+                            transitionsBuilder: (_, animation, __, child) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              );
+                            },
+                          ),
+                        );
+                      },
+                child: SizedBox(
+                  width: 56,
+                  child: Column(
+                    children: [
+                      // Thumbnail
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 48,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isSelected
+                                ? Colors.black
+                                : Colors.black.withOpacity(0.1),
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Stack(
+                          children: [
+                            // Thumbnail image
+                            if (thumbnailUrl != null)
+                              Positioned.fill(
+                                child: Image.network(
+                                  thumbnailUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: Colors.grey[100],
+                                    child: Center(
+                                      child: Text(
+                                        variant.color.isNotEmpty
+                                            ? variant.color[0].toUpperCase()
+                                            : '?',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              Container(
+                                color: Colors.grey[100],
+                                child: Center(
+                                  child: Text(
+                                    variant.color.isNotEmpty
+                                        ? variant.color[0].toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            // Selected indicator overlay
+                            if (isSelected)
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  height: 3,
+                                  color: Colors.black,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Color name label
+                      Text(
+                        variant.color,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: isSelected ? Colors.black : Colors.grey[600],
+                          letterSpacing: 0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

@@ -40,7 +40,9 @@ class _FavouriteReelsGridScreenState extends State<FavouriteReelsGridScreen> {
   void _openReelPlayer(int index) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const LikedReelsScreen()),
+      MaterialPageRoute(
+        builder: (context) => LikedReelsScreen(initialIndex: index),
+      ),
     );
   }
 

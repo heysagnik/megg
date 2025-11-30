@@ -933,50 +933,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildNewArrivalsHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Row(
-        children: [
-          const Text(
-            'NEW ARRIVALS',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 2.5,
-            ),
-          ),
-          const Spacer(),
-          if (_newArrivals.isNotEmpty)
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SearchResultsScreen(
-                      initialQuery: 'New Arrivals',
-                      initialProducts: _newArrivals,
-                      hideControls: true,
-                    ),
-                  ),
-                );
-              },
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                foregroundColor: Colors.grey[700],
-              ),
-              child: const Text(
-                'VIEW ALL',
-                style: TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 1.8,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
-        ],
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.0),
+      child: Text(
+        'NEW ARRIVALS',
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 2.5,
+        ),
       ),
     );
   }
+
 
   // _buildProductCard removed (trending uses ProductCard from product_widget.dart)
 }

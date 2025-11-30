@@ -7,7 +7,9 @@ import '../services/reel_service.dart';
 import '../widgets/loader.dart';
 
 class LikedReelsScreen extends StatefulWidget {
-  const LikedReelsScreen({super.key});
+  final int initialIndex;
+
+  const LikedReelsScreen({super.key, this.initialIndex = 0});
 
   @override
   State<LikedReelsScreen> createState() => _LikedReelsScreenState();
@@ -16,7 +18,7 @@ class LikedReelsScreen extends StatefulWidget {
 class _LikedReelsScreenState extends State<LikedReelsScreen>
     with WidgetsBindingObserver {
   final ReelService _reelService = ReelService();
-  final PageController _pageController = PageController();
+  late PageController _pageController;
 
   List<Reel> _reels = [];
   bool _isLoading = true;
@@ -32,6 +34,8 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
   @override
   void initState() {
     super.initState();
+    _currentPageIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
     WidgetsBinding.instance.addObserver(this);
     _loadReels();
   }
@@ -91,7 +95,10 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
         _likedReels.clear();
         _likeCounts.clear();
         _reelKeys.clear();
-        _currentPageIndex = 0;
+        // Preserve initial index if valid, otherwise reset to 0
+        if (_currentPageIndex >= reels.length) {
+          _currentPageIndex = 0;
+        }
 
         for (var reel in reels) {
           _likeCounts[reel.id] = reel.likes;
@@ -99,9 +106,8 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
         }
       });
 
-      if (reels.isNotEmpty && _pageController.hasClients) {
-        _pageController.jumpToPage(0);
-        _trackView(reels[0].id);
+      if (reels.isNotEmpty) {
+        _trackView(reels[_currentPageIndex].id);
       }
     } catch (e) {
       if (!mounted) return;
