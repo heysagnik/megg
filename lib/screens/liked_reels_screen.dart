@@ -8,8 +8,13 @@ import '../widgets/loader.dart';
 
 class LikedReelsScreen extends StatefulWidget {
   final int initialIndex;
+  final List<Reel>? initialReels;
 
-  const LikedReelsScreen({super.key, this.initialIndex = 0});
+  const LikedReelsScreen({
+    super.key,
+    this.initialIndex = 0,
+    this.initialReels,
+  });
 
   @override
   State<LikedReelsScreen> createState() => _LikedReelsScreenState();
@@ -67,15 +72,7 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      setState(() => _isMutedDueToCall = true);
-      _reelKeys[_currentPageIndex]?.currentState?.setMuted(true);
-    } else if (state == AppLifecycleState.resumed) {
-      setState(() => _isMutedDueToCall = false);
-      _reelKeys[_currentPageIndex]?.currentState?.setMuted(false);
-      _loadReels();
-    }
+    // Do nothing on lifecycle changes to keep video playing
   }
 
   Future<void> _loadReels() async {
@@ -85,7 +82,12 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
         _errorMessage = null;
       });
 
-      final reels = await _reelService.getLikedReels();
+      List<Reel> reels;
+      if (widget.initialReels != null && widget.initialReels!.isNotEmpty) {
+        reels = widget.initialReels!;
+      } else {
+        reels = await _reelService.getLikedReels();
+      }
 
       if (!mounted) return;
 
@@ -462,6 +464,7 @@ class _ReelItemState extends State<_ReelItem>
     try {
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.reel.videoUrl),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
 
       await _controller!.initialize();

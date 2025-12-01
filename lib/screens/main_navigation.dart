@@ -41,20 +41,56 @@ class _MainNavigationState extends State<MainNavigation> {
             context: context,
             builder: (context) {
               return AlertDialog(
-                title: const Text('Exit App'),
-                content: const Text('Are you sure you want to exit the app?'),
+                backgroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                ),
+                title: const Text(
+                  'EXIT APP',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 2,
+                  ),
+                ),
+                content: const Text(
+                  'Are you sure you want to exit?',
+                  style: TextStyle(fontSize: 14, letterSpacing: 0.3),
+                ),
                 actions: [
                   TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop(false);
-                    },
-                    child: const Text('No'),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: Text(
+                      'CANCEL',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 1.5,
+                        color: Colors.grey[700],
+                      ),
+                    ),
                   ),
                   TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop(true);
-                    },
-                    child: const Text('Yes'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                    child: const Text(
+                      'EXIT',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 1.5,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ],
               );

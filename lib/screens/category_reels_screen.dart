@@ -43,14 +43,7 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      setState(() => _isMutedDueToCall = true);
-      _reelKeys[_currentPageIndex]?.currentState?.setMuted(true);
-    } else if (state == AppLifecycleState.resumed) {
-      setState(() => _isMutedDueToCall = false);
-      _reelKeys[_currentPageIndex]?.currentState?.setMuted(false);
-    }
+    // Do nothing on lifecycle changes to keep video playing
   }
 
   @override
@@ -491,6 +484,7 @@ class _ReelItemState extends State<_ReelItem>
     try {
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.reel.videoUrl),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
 
       await _controller!.initialize();

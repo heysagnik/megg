@@ -17,7 +17,20 @@ class ProductService {
     String? search,
     int page = 1,
     int limit = 20,
+    bool forceRefresh = false,
   }) async {
+    // Only cache the first page of "New Arrivals" (no filters)
+    final bool canCache =
+        page == 1 && category == null && color == null && search == null;
+    final String cacheKey = 'products_new_arrivals_p1_l$limit';
+
+    if (canCache && !forceRefresh) {
+      final cachedData = await _cacheService.getListCache(cacheKey);
+      if (cachedData != null) {
+        return cachedData.map((json) => Product.fromJson(json)).toList();
+      }
+    }
+
     try {
       final queryParams = <String, String>{
         'page': page.toString(),
@@ -34,25 +47,37 @@ class ProductService {
       );
 
       final data = response['data'] ?? response['products'];
+      List<Product> products = [];
 
       if (data is List) {
-        return data.map((json) => Product.fromJson(json)).toList();
-      }
-
-      if (data is Map && data['products'] is List) {
-        return (data['products'] as List)
+        products = data.map((json) => Product.fromJson(json)).toList();
+      } else if (data is Map && data['products'] is List) {
+        products = (data['products'] as List)
+            .map((json) => Product.fromJson(json))
+            .toList();
+      } else if (response['products'] is List) {
+        products = (response['products'] as List)
             .map((json) => Product.fromJson(json))
             .toList();
       }
 
-      if (response['products'] is List) {
-        return (response['products'] as List)
-            .map((json) => Product.fromJson(json))
-            .toList();
+      if (canCache && products.isNotEmpty) {
+        await _cacheService.setListCache(
+          cacheKey,
+          products.map((p) => p.toJson()).toList(),
+          expiry: const Duration(minutes: 10),
+        );
       }
 
-      return [];
+      return products;
     } catch (e) {
+      if (canCache) {
+        // Try to return cached data even if expired
+        final cachedData = await _cacheService.getListCache(cacheKey);
+        if (cachedData != null) {
+          return cachedData.map((json) => Product.fromJson(json)).toList();
+        }
+      }
       throw Exception('Failed to fetch products: ${e.toString()}');
     }
   }

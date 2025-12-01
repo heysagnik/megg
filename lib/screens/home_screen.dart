@@ -78,14 +78,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadHomeData() async {
-    // Ensure loading state is true at start
-    if (mounted) setState(() => _isScreenLoading = true);
+  Future<void> _loadHomeData({bool forceRefresh = false}) async {
+    // Only show full screen loader if we have no data and it's not a refresh
+    if (!forceRefresh &&
+        _dailyOutfits.isEmpty &&
+        _trendingProducts.isEmpty &&
+        _newArrivals.isEmpty) {
+      if (mounted) setState(() => _isScreenLoading = true);
+    }
 
     await Future.wait([
-      _loadDailyOutfits(),
-      _loadTrendingProducts(),
-      _loadNewArrivals(),
+      _loadDailyOutfits(forceRefresh: forceRefresh),
+      _loadTrendingProducts(forceRefresh: forceRefresh),
+      _loadNewArrivals(forceRefresh: forceRefresh),
       _loadWishlist(),
       _loadRecentlyViewed(),
     ]);
@@ -160,14 +165,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadDailyOutfits() async {
+  Future<void> _loadDailyOutfits({bool forceRefresh = false}) async {
     try {
       setState(() {
         _isLoadingOutfits = true;
         _dailyOutfitsError = null;
       });
 
-      final outfits = await _outfitService.getDailyOutfits();
+      final outfits =
+          await _outfitService.getDailyOutfits(forceRefresh: forceRefresh);
 
       if (!mounted) return;
 
@@ -192,8 +198,10 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _isLoadingOutfits = false;
         _dailyOutfitsError = e.toString().replaceAll('Exception: ', '');
-        _dailyOutfits = [];
-        _currentOutfitPage = 0;
+        // Don't clear existing data on error if we have it
+        if (_dailyOutfits.isEmpty) {
+          _dailyOutfits = [];
+        }
       });
       _stopOutfitCarousel();
     }
@@ -265,14 +273,17 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadTrendingProducts() async {
+  Future<void> _loadTrendingProducts({bool forceRefresh = false}) async {
     try {
       setState(() {
         _isLoadingTrending = true;
         _trendingError = null;
       });
 
-      final products = await _trendingService.getTrendingProducts(limit: 10);
+      final products = await _trendingService.getTrendingProducts(
+        limit: 10,
+        forceRefresh: forceRefresh,
+      );
 
       if (!mounted) return;
 
@@ -295,17 +306,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadNewArrivals() async {
+  Future<void> _loadNewArrivals({bool forceRefresh = false}) async {
     try {
       setState(() {
         _isLoadingNew = true;
         _newArrivalsError = null;
-        _page = 1;
+        if (forceRefresh) _page = 1;
       });
 
       final products = await _productService.getProducts(
         page: 1,
         limit: _limit,
+        forceRefresh: forceRefresh,
       );
 
       if (!mounted) return;
@@ -409,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isScreenLoading
           ? const Center(child: Loader(showCaption: true))
           : CustomRefreshIndicator(
-              onRefresh: _loadHomeData,
+              onRefresh: () => _loadHomeData(forceRefresh: true),
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [

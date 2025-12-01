@@ -35,12 +35,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Video is already muted, so no action needed during calls
-    // It will keep playing silently
+    // Do nothing on lifecycle changes to keep video playing
   }
 
   void _initializeVideo() {
-    _videoController = VideoPlayerController.asset('assets/intro.mp4')
+    _videoController = VideoPlayerController.asset(
+      'assets/intro.mp4',
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    )
       ..initialize()
           .then((_) {
             setState(() {

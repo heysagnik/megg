@@ -1,6 +1,7 @@
 import '../models/reel.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
+import 'cache_service.dart';
 
 class ReelService {
   static final ReelService _instance = ReelService._internal();
@@ -89,17 +90,27 @@ class ReelService {
 
       final response = await _apiClient.get('/reels/liked', requiresAuth: true);
 
+      List<Reel> reels = [];
+
       if (response['data'] != null) {
-        return (response['data'] as List)
+        reels = (response['data'] as List)
             .map((json) => Reel.fromJson(json))
             .toList();
       } else if (response['reels'] != null) {
-        return (response['reels'] as List)
+        reels = (response['reels'] as List)
             .map((json) => Reel.fromJson(json))
             .toList();
       }
 
-      return [];
+      if (reels.isNotEmpty) {
+        // Cache the results
+        await CacheService().setListCache(
+          'liked_reels',
+          reels.map((r) => r.toJson()).toList(),
+        );
+      }
+
+      return reels;
     } catch (e) {
       throw Exception('Failed to fetch liked reels: ${e.toString()}');
     }

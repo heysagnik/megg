@@ -100,9 +100,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       };
 
       // Read cached wishlist (if any) directly for instant UI
-      final cached = await CacheService().getListCache('wishlist');
-      if (cached != null) {
-        final cachedProducts = cached
+      final cachedWishlist = await CacheService().getListCache('wishlist');
+      if (cachedWishlist != null) {
+        final cachedProducts = cachedWishlist
             .map((json) => Product.fromJson(json))
             .toList(growable: false);
         if (mounted) {
@@ -121,6 +121,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _wishlistIds
               ..clear()
               ..addAll(cachedIds);
+          });
+        }
+      }
+
+      // Read cached liked reels for instant UI
+      final cachedReels = await CacheService().getListCache('liked_reels');
+      if (cachedReels != null) {
+        final reels = cachedReels
+            .map((json) => Reel.fromJson(json))
+            .toList(growable: false);
+        if (mounted) {
+          setState(() {
+            _likedReels = reels;
           });
         }
       }
@@ -262,7 +275,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AestheticAppBar(
         title: 'PROFILE',
         actions: [
-          if (_authService.isAuthenticated)
+          if (_authService.isAuthenticated) ...[
+            IconButton(
+              icon: Icon(PhosphorIconsRegular.signOut, size: 20),
+              onPressed: _handleLogout,
+              splashRadius: 20,
+            ),
             IconButton(
               icon: Icon(PhosphorIconsRegular.gear, size: 20),
               onPressed: () {
@@ -275,6 +293,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
               splashRadius: 20,
             ),
+          ],
           const SizedBox(width: 8),
         ],
       ),
@@ -291,19 +310,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       physics: const ClampingScrollPhysics(),
       child: Column(
         children: [
-          const SizedBox(height: 32),
+          const SizedBox(height: 12),
           _buildProfileHeader(),
-          const SizedBox(height: 16),
-
-          // Sign Out / Sign In button right below profile
-          if (_authService.isAuthenticated) ...[
-            _buildSignOutButton(),
-          ] else ...[
+          
+          if (!_authService.isAuthenticated) ...[
+            const SizedBox(height: 16),
             _buildSignInButton(),
           ],
 
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             child: Divider(
               height: 1,
               thickness: 0.5,
@@ -336,27 +352,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSignOutButton() {
-    return TextButton(
-      onPressed: _handleLogout,
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        foregroundColor: Colors.grey[600],
-      ),
-      child: const Text(
-        'SIGN OUT',
-        style: TextStyle(
-          fontSize: 10,
-          letterSpacing: 1.8,
-          fontWeight: FontWeight.w400,
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildFavouriteReelsSection() {
     final size = MediaQuery.of(context).size;
-    final double itemWidth = (size.width * 0.28).clamp(100.0, 140.0);
+    final double itemWidth = (size.width * 0.45).clamp(160.0, 220.0);
     final double itemHeight = itemWidth * 1.6;
 
     return Column(
@@ -635,8 +635,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       children: [
         Container(
-          width: 72,
-          height: 72,
+          width: 64,
+          height: 64,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.grey[50],
@@ -653,7 +653,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Text(
                     initials,
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.w300,
                       letterSpacing: 2,
                       color: Colors.black,
@@ -662,11 +662,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 )
               : null,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Text(
           userName.toUpperCase(),
           style: const TextStyle(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.w300,
             letterSpacing: 3,
             color: Colors.black,
