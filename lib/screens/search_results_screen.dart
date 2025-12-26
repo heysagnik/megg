@@ -38,116 +38,107 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
   static const Map<String, List<String>> _categorySubcategories = {
     'Jacket': [
-      'Puffer',
-      'Leather',
-      'Varsity',
-      'Bomber',
-      'Biker',
-      'Half Jacket',
-      'Casual Jacket',
+      'Puffer Jacket',
+      'Leather Jacket',
+      'Varsity Jacket',
+      'Bomber Jacket',
+      'Biker Jacket',
       'Denim Jacket',
-      'Wind-cheater',
+      'Windcheater',
+      'Suede Jacket',
+      'Half Jacket',
+      'Overcoat',
     ],
-    'Hoodies': ['Zip Hoodie', 'Pullover Hoodie'],
+    'Hoodies': ['Regular Hoodie', 'Zip Hoodie', 'Printed Hoodie'],
     'Sweater': [
-      'V Neck Sweater',
       'Round Neck Sweater',
-      'Turtle Neck Sweater',
+      'V-Neck Sweater',
+      'Turtleneck Sweater',
       'Polo Neck Sweater',
       'Sweater Vest',
       'Cardigan',
+      'Zip Sweater',
     ],
     'Sweatshirt': [
       'Oversized Sweatshirt',
-      'Graphic Sweatshirt',
-      'Normal Sweatshirt',
+      'Printed Sweatshirt',
+      'Pullover Sweatshirt',
+      'Zip Sweatshirt',
     ],
     'Shirt': [
-      'Check Shirt',
+      'Checked Shirt',
       'Striped Shirt',
       'Printed Shirt',
       'Linen Shirt',
       'Textured Shirt',
-      'Half Shirt',
+      'Half-Sleeve Shirt',
       'Solid Shirt',
       'Shacket',
-      'Formal Shirt',
-      'Cuban Shirt',
     ],
     'Jeans': [
-      'Wide Leg Jeans',
+      'Wide-Leg Jeans',
       'Straight Fit Jeans',
-      'Cargo Jeans',
-      'Linen Pants',
+      'Cargo Pants',
       'Bootcut Jeans',
-      'Formal Pants',
       'Chinos',
+      'Linen Pants',
     ],
-    'Trackpants': [
-      'Baggy Trackpants',
-      'Cargo Trackpants',
-      'Straight Fit Trackpants',
-    ],
-    'Shoes': [
-      'Sneakers',
-      'Sports Shoes',
-      'Walking Shoes',
-      'Clogs',
-      'Boots',
-      'Formal Shoes',
-      'Loafers',
-      'Canvas Shoes',
-    ],
+    'Trackpants': ['Baggy Trackpants', 'Cargo Trackpants'],
+    'Shoes': ['Sneakers', 'Clogs', 'Boots', 'Loafers', 'Canvas Shoes'],
     'Tshirt': [
-      'Polo Tshirt',
-      'Oversized Tshirt',
-      'Full Sleeve Tshirt',
-      'Gym Tshirt',
-      'V Neck Tshirt',
-      'Round Neck Tshirt',
-      'Printed Tshirt',
-      'Normal Tshirt',
+      'Regular Fit T-Shirt',
+      'Oversized T-Shirt',
+      'Polo T-Shirt',
+      'Full-Sleeve T-Shirt',
+      'Gym T-Shirt',
     ],
     'Mens Accessories': [
       'Bags',
       'Caps',
       'Watches',
-      'Tie',
-      'Belt',
+      'Belts',
       'Sunglasses',
       'Rings',
-      'Lockets',
+      'Chains',
     ],
-    'Sports': [
-      'Sports Shorts',
+    'Sports Wear': [
+      'Shorts',
       'Sports Jacket',
       'Socks',
-      'Sports Shoes General',
       'Football Shoes',
       'Badminton Shoes',
-      'Gym Tee',
+      'Sports Shoes',
     ],
-    'Office wear': [
-      'Formal Pants Office',
-      'Formal Shirts Office',
+    'Office Wear': [
+      'Formal Shirts',
+      'Formal Pants',
+      'Formal Shoes',
       'Suits',
       'Tuxedo',
-      'Formal Shoes Office',
-      'Loafers Office',
       'Blazers',
       'Ties & Pocket Squares',
     ],
-    'Skin care': ['Face Wash', 'Moisturiser', 'Cleanser', 'Sunscreen', 'Serum'],
+    'Body Care': [
+      'Face Wash',
+      'Moisturiser',
+      'Sunscreen',
+      'Serum',
+      'Underarm Roll-On',
+      'Shampoo',
+      'Body Wash',
+      'Hair Oil',
+    ],
     'Traditional': [
       'Kurta',
-      'Koti',
       'Pyjama',
       'Short Kurta',
-      'Blazer Traditional',
       'Kurta Set',
-      'Indo-western',
+      'Indo-Western Outfit',
+      'Nehru Jacket',
+      'Ethnic Shoes',
     ],
-    'Perfume': ['EDT', 'EDC', 'EDP'],
+    'Perfume': ['Luxurious', 'Budget-Friendly'],
+    'Innerwear': ['Trunks', 'Vests', 'Boxers', 'Thermal Wear'],
   };
 
   List<Product> _searchResults = [];
@@ -172,6 +163,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   String? _detectedCategory;
   String? _detectedSubcategory;
   String? _detectedColor;
+
+  // Track if subcategory was detected from original query (not user selection)
+  bool _subcategoryFromQuery = false;
 
   // UI state
   List<String> _availableSubcategories = [];
@@ -351,8 +345,18 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
     if (filters != null) {
       _detectedCategory = filters['appliedCategory'] as String?;
-      _detectedSubcategory = filters['appliedSubcategory'] as String?;
       _detectedColor = filters['appliedColor'] as String?;
+      
+      // Only update detected subcategory if user hasn't explicitly selected one
+      // This prevents the filter bar from disappearing when browsing subcategories
+      final apiSubcategory = filters['appliedSubcategory'] as String?;
+      if (_selectedSubcategory == null && apiSubcategory != null) {
+        _detectedSubcategory = apiSubcategory;
+        _subcategoryFromQuery = true;  // Subcategory was in original query
+      } else if (_selectedSubcategory != null) {
+        // User selected a subcategory - keep showing the filter bar
+        _subcategoryFromQuery = false;
+      }
 
       // If user hasn't explicitly selected a category, use the detected one
       if (_selectedCategory == null && _detectedCategory != null) {
@@ -484,7 +488,25 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     if (_selectedSubcategory != null) activeFilterCount++;
     if (_selectedColor != null) activeFilterCount++;
 
-    return Scaffold(
+    return PopScope(
+      canPop: _selectedSubcategory == null && _selectedColor == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        
+        // Clear filters step by step before allowing back navigation
+        if (_selectedSubcategory != null || _selectedColor != null) {
+          setState(() {
+            if (_selectedSubcategory != null) {
+              _selectedSubcategory = null;
+              _selectedCategory = null;
+            } else if (_selectedColor != null) {
+              _selectedColor = null;
+            }
+          });
+          _performSearch(_currentQuery, page: 1);
+        }
+      },
+      child: Scaffold(
       appBar: AestheticAppBar(
         title: title,
         showBackButton: true,
@@ -492,9 +514,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
           IconButton(
             icon: Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
             onPressed: () {
-              Navigator.push(
+              Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const SearchScreen()),
+                MaterialPageRoute(
+                  builder: (_) => SearchScreen(initialQuery: _currentQuery),
+                ),
               );
             },
             splashRadius: 20,
@@ -508,7 +532,12 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
               _detectedCategory != null &&
               _selectedCategory == null)
             _buildDetectedFiltersInfo(),
-          if (!widget.hideControls && _availableSubcategories.isNotEmpty)
+          // Show subcategory filter if:
+          // 1. We have subcategories to show
+          // 2. AND (subcategory was not detected from query OR user is actively browsing)
+          if (!widget.hideControls && 
+              _availableSubcategories.isNotEmpty &&
+              !_subcategoryFromQuery)
             SubcategoryFilterBar(
               subcategories: _availableSubcategories,
               selectedSubcategory: _selectedSubcategory,
@@ -544,6 +573,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
               isSticky: true,
               activeFilterCount: activeFilterCount,
             ),
+      ),
     );
   }
 
@@ -728,7 +758,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
           ),
         );
       },
-      onProductDoubleTap: (product) => _handleDoubleTap(product.id),
+      // Note: onProductDoubleTap is not needed since ProductCard._handleDoubleTap
+      // already calls onWishlistToggle internally
       wishlistIds: _wishlist,
       pageControllers: _pageControllers,
       onWishlistToggle: _handleDoubleTap,
@@ -755,7 +786,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
           ),
         );
       },
-      onProductDoubleTap: (product) => _handleDoubleTap(product.id),
+      // Note: onProductDoubleTap is not needed since ProductCard._handleDoubleTap
+      // already calls onWishlistToggle internally
       wishlistIds: _wishlist,
       pageControllers: _pageControllers,
       onWishlistToggle: _handleDoubleTap,
@@ -1003,7 +1035,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                           ),
                         ],
                       ),
-                      if (_availableSubcategories.isNotEmpty) ...[
+                      // Only show subcategory filter if API didn't already apply one
+                      if (_availableSubcategories.isNotEmpty && _detectedSubcategory == null) ...[
                         const SizedBox(height: 24),
                         const Text(
                           'SUBCATEGORY',

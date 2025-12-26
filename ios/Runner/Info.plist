@@ -45,15 +45,17 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<!-- Enable custom URL scheme for Supabase OAuth deep-links -->
+	<!-- Deep Link: Custom URL Scheme -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>io.supabase.megg</string>
+			<string>com.megg.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>io.supabase.megg</string>
+				<string>megg</string>
 			</array>
 		</dict>
 	</array>

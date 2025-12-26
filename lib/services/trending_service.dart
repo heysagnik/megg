@@ -8,6 +8,8 @@ class TrendingService {
   factory TrendingService() => _instance;
   TrendingService._internal();
 
+  static const Duration _kCacheExpiry = Duration(minutes: 5);
+
   final ApiClient _apiClient = ApiClient();
   final CacheService _cacheService = CacheService();
 
@@ -18,7 +20,6 @@ class TrendingService {
   }) async {
     final cacheKey = 'trending_p${page}_l$limit';
 
-    // Check cache first (if not forcing refresh)
     if (!forceRefresh) {
       final cachedData = await _cacheService.getListCache(cacheKey);
       if (cachedData != null) {
@@ -28,43 +29,49 @@ class TrendingService {
 
     try {
       final response = await _apiClient.get(
-        '/trending/products',
-        queryParams: {'page': page.toString(), 'limit': limit.toString()},
-        requiresAuth: true,
+        '/trending',
+        queryParams: {'limit': limit.toString()},
       );
-      final data = response['data'] ?? response['products'];
 
       List<Product> products = [];
+      List<dynamic>? productList;
 
-      if (data is List) {
-        products = data.map((json) => Product.fromJson(json)).toList();
-      } else if (data is Map && data['products'] is List) {
-        products = (data['products'] as List)
-            .map((json) => Product.fromJson(json))
-            .toList();
-      } else if (response['products'] is List) {
-        products = (response['products'] as List)
-            .map((json) => Product.fromJson(json))
-            .toList();
+      // API returns direct array or wrapped in data/products
+      if (response is List) {
+        productList = response;
+      } else if (response is Map<String, dynamic>) {
+        productList = response['data'] as List? ??
+            response['products'] as List? ??
+            (response['data'] is Map ? response['data']['products'] as List? : null);
+      }
+
+      if (productList != null) {
+        for (final item in productList) {
+          if (item is Map<String, dynamic>) {
+            try {
+              products.add(Product.fromJson(item));
+            } catch (e) {
+              debugPrint('Failed to parse trending product: $e');
+            }
+          }
+        }
       }
 
       if (products.isNotEmpty) {
-        // Cache trending products (5 minutes expiry)
         await _cacheService.setListCache(
           cacheKey,
           products.map((p) => p.toJson()).toList(),
-          expiry: const Duration(minutes: 5),
+          expiry: _kCacheExpiry,
         );
       }
 
       return products;
     } catch (e) {
-      // Try to return cached data even if expired
+      debugPrint('Trending fetch error: $e');
       final cachedData = await _cacheService.getListCache(cacheKey);
       if (cachedData != null) {
         return cachedData.map((json) => Product.fromJson(json)).toList();
       }
-
       throw Exception('Failed to fetch trending products: ${e.toString()}');
     }
   }
@@ -73,7 +80,7 @@ class TrendingService {
     try {
       await _apiClient.post('/trending/click/$productId');
     } catch (e) {
-      debugPrint('Warning: Failed to track click: $e');
+      debugPrint('Failed to track click: $e');
     }
   }
 }

@@ -175,6 +175,17 @@ class SubcategoryFilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (subcategories.isEmpty) return const SizedBox.shrink();
 
+    // Reorder subcategories so selected one appears first
+    final orderedSubcategories = <String>[];
+    if (selectedSubcategory != null && subcategories.contains(selectedSubcategory)) {
+      orderedSubcategories.add(selectedSubcategory!);
+      orderedSubcategories.addAll(
+        subcategories.where((s) => s != selectedSubcategory),
+      );
+    } else {
+      orderedSubcategories.addAll(subcategories);
+    }
+
     return Container(
       height: 48,
       decoration: BoxDecoration(
@@ -186,7 +197,7 @@ class SubcategoryFilterBar extends StatelessWidget {
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         scrollDirection: Axis.horizontal,
-        itemCount: subcategories.length + 1, // +1 for "All" chip
+        itemCount: orderedSubcategories.length + 1, // +1 for "All" chip
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           if (index == 0) {
@@ -198,7 +209,7 @@ class SubcategoryFilterBar extends StatelessWidget {
             );
           }
 
-          final subcategory = subcategories[index - 1];
+          final subcategory = orderedSubcategories[index - 1];
           return _buildChip(
             label: subcategory,
             isSelected: selectedSubcategory == subcategory,

@@ -5,9 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('Background notification received: ${message.messageId}');
-  debugPrint('Title: ${message.notification?.title}');
-  debugPrint('Body: ${message.notification?.body}');
+  debugPrint('Background notification: ${message.messageId}');
 }
 
 class FCMService {
@@ -15,12 +13,13 @@ class FCMService {
   factory FCMService() => _instance;
   FCMService._internal();
 
+  static const String _kAllUsersTopic = 'all-users';
+  static const String _kChannelId = 'megg_notifications';
+  static const String _kChannelName = 'Megg Notifications';
+  static const String _kChannelDescription = 'Notifications for new products, offers, and updates';
+
   late final FirebaseMessaging _firebaseMessaging;
-  final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
-
-  static const String _allUsersTopic = 'all-users';
-
+  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   Future<void> initialize() async {
@@ -37,8 +36,7 @@ class FCMService {
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       debugPrint('Notification permission: granted');
-    } else if (settings.authorizationStatus ==
-        AuthorizationStatus.provisional) {
+    } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
       debugPrint('Notification permission: provisional');
     } else {
       debugPrint('Notification permission: denied');
@@ -52,7 +50,6 @@ class FCMService {
     await _subscribeToAllUsersTopic();
 
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
 
     final initialMessage = await _firebaseMessaging.getInitialMessage();
@@ -61,13 +58,13 @@ class FCMService {
       _handleNotificationTap(initialMessage);
     }
 
-    debugPrint('FCM Service initialized successfully');
+    debugPrint('FCM Service initialized');
   }
 
   Future<void> _subscribeToAllUsersTopic() async {
     try {
-      await _firebaseMessaging.subscribeToTopic(_allUsersTopic);
-      debugPrint('Subscribed to topic: $_allUsersTopic');
+      await _firebaseMessaging.subscribeToTopic(_kAllUsersTopic);
+      debugPrint('Subscribed to topic: $_kAllUsersTopic');
     } catch (e) {
       debugPrint('Error subscribing to topic: $e');
     }
@@ -75,17 +72,15 @@ class FCMService {
 
   Future<void> unsubscribe() async {
     try {
-      await _firebaseMessaging.unsubscribeFromTopic(_allUsersTopic);
-      debugPrint('Unsubscribed from topic: $_allUsersTopic');
+      await _firebaseMessaging.unsubscribeFromTopic(_kAllUsersTopic);
+      debugPrint('Unsubscribed from topic: $_kAllUsersTopic');
     } catch (e) {
-      debugPrint('Error unsubscribing from topic: $e');
+      debugPrint('Error unsubscribing: $e');
     }
   }
 
   Future<void> _initializeLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/launcher_icon',
-    );
+    const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -103,27 +98,21 @@ class FCMService {
     );
 
     const androidChannel = AndroidNotificationChannel(
-      'megg_notifications',
-      'Megg Notifications',
-      description: 'Notifications for new products, offers, and updates',
+      _kChannelId,
+      _kChannelName,
+      description: _kChannelDescription,
       importance: Importance.high,
       enableVibration: true,
       playSound: true,
     );
 
     await _localNotifications
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(androidChannel);
   }
 
   void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('Foreground notification received');
-    debugPrint('Title: ${message.notification?.title}');
-    debugPrint('Body: ${message.notification?.body}');
-    debugPrint('Data: ${message.data}');
-
+    debugPrint('Foreground notification: ${message.notification?.title}');
     _showLocalNotification(message);
   }
 
@@ -132,9 +121,9 @@ class FCMService {
     if (notification == null) return;
 
     const androidDetails = AndroidNotificationDetails(
-      'megg_notifications',
-      'Megg Notifications',
-      channelDescription: 'Notifications for new products, offers, and updates',
+      _kChannelId,
+      _kChannelName,
+      channelDescription: _kChannelDescription,
       importance: Importance.high,
       priority: Priority.high,
       showWhen: true,

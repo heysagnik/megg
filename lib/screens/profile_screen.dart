@@ -6,6 +6,8 @@ import '../services/auth_service.dart';
 import '../services/wishlist_service.dart';
 import '../services/reel_service.dart';
 import '../services/cache_service.dart';
+import '../services/connectivity_service.dart';
+import '../widgets/offline_banner.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import 'product_screen.dart';
 import 'settings_screen.dart';
@@ -35,6 +37,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final Set<String> _wishlistIds = {};
   Timer? _wishlistRefreshTimer;
 
+  bool _isWishlistLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -55,12 +59,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfileData({bool forceRefresh = false}) async {
     if (!_authService.isAuthenticated) {
-      setState(() {
-        _errorMessage = null;
-        _userProfile = null;
-        _wishlist = [];
-        _wishlistIds.clear();
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = null;
+          _userProfile = null;
+          _wishlist = [];
+          _wishlistIds.clear();
+        });
+      }
       return;
     }
 
@@ -75,8 +81,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (!mounted) return;
 
+      final userProfile = results[0] as dynamic;
       setState(() {
-        _userProfile = results[0] as Map<String, dynamic>;
+        // Handle both UserProfile object and Map responses
+        if (userProfile is Map<String, dynamic>) {
+          _userProfile = userProfile;
+        } else if (userProfile != null) {
+          _userProfile = userProfile.toJson();
+        }
         _wishlist = results[1] as List<Product>;
         _wishlistIds.clear();
         _wishlistIds.addAll(_wishlist.map((p) => p.id));
@@ -93,15 +105,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Quickly set UI from cached wishlist, then trigger background refresh
   Future<void> _primeFromCacheThenRefresh() async {
     try {
-      // Set basic user data from auth immediately (no network)
-      _userProfile ??= {
-        'name': _authService.currentUser?.userMetadata?['name'] ?? 'User',
-        'email': _authService.currentUser?.email ?? '',
-      };
+      // Start loading state if we suspect we might need to fetch
+      if (mounted) setState(() => _isWishlistLoading = true);
+
+      // Check connectivity
+      final isOffline = ConnectivityService().isOffline;
+      
+      // Load profile
+      if (_authService.isAuthenticated) {
+        if (isOffline) {
+          // Offline: use cached profile only
+          debugPrint('[Profile] Offline - loading cached profile');
+          final cachedProfile = await _authService.getCachedProfile();
+          if (mounted && cachedProfile != null) {
+            setState(() {
+              _userProfile = cachedProfile.toJson();
+            });
+          }
+        } else if (_authService.currentUser == null) {
+          // Online but no current user: fetch from server
+          try {
+            final profile = await _authService.getProfile();
+            if (mounted) {
+              setState(() {
+                _userProfile = profile.toJson();
+              });
+            }
+          } catch (e) {
+            // Network failed, try cached profile
+            final cachedProfile = await _authService.getCachedProfile();
+            if (mounted && cachedProfile != null) {
+              setState(() {
+                _userProfile = cachedProfile.toJson();
+              });
+            }
+          }
+        } else {
+          // Set basic user data from auth immediately (no network)
+          _userProfile ??= _authService.currentUser!.toJson();
+        }
+      }
 
       // Read cached wishlist (if any) directly for instant UI
       final cachedWishlist = await CacheService().getListCache('wishlist');
-      if (cachedWishlist != null) {
+      if (cachedWishlist != null && cachedWishlist.isNotEmpty) {
         final cachedProducts = cachedWishlist
             .map((json) => Product.fromJson(json))
             .toList(growable: false);
@@ -111,6 +158,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _wishlistIds
               ..clear()
               ..addAll(_wishlist.map((p) => p.id));
+            // Ensure loading is false if we have data
+            _isWishlistLoading = false;
           });
         }
       } else {
@@ -121,6 +170,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _wishlistIds
               ..clear()
               ..addAll(cachedIds);
+            // Still loading products, but we have IDs
           });
         }
       }
@@ -141,13 +191,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // Silently ignore cache errors in production; UI will refresh from network
     } finally {
       // Regardless of cache, refresh in background without loaders
-      _refreshWishlistInBackground();
+      await _refreshWishlistInBackground();
       _refreshLikedReelsInBackground();
     }
   }
 
   Future<void> _refreshLikedReelsInBackground() async {
     if (!_authService.isAuthenticated) return;
+    
+    // Skip network refresh when offline
+    if (ConnectivityService().isOffline) {
+      debugPrint('[Profile] Offline - skipping liked reels refresh');
+      return;
+    }
+    
     try {
       final reels = await _reelService.getLikedReels();
       if (!mounted) return;
@@ -160,18 +217,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _refreshWishlistInBackground() async {
+    // Skip network refresh when offline
+    if (ConnectivityService().isOffline) {
+      debugPrint('[Profile] Offline - skipping wishlist refresh');
+      if (mounted) setState(() => _isWishlistLoading = false);
+      return;
+    }
+    
     try {
       // This will work for both authenticated and non-authenticated users
-      final updated = await _wishlistService.getWishlist(forceRefresh: true);
+      // Use forceRefresh: false to respect the service's 5-minute cache logic
+      final updated = await _wishlistService.getWishlist(forceRefresh: false);
       if (!mounted) return;
       setState(() {
         _wishlist = updated;
         _wishlistIds
           ..clear()
           ..addAll(_wishlist.map((p) => p.id));
+        _isWishlistLoading = false;
       });
     } catch (e) {
       // Keep showing cached UI on errors
+      if (mounted) setState(() => _isWishlistLoading = false);
     }
   }
 
@@ -297,7 +364,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _buildBody(),
+      body: OfflineBanner.wrapWithBanner(_buildBody()),
     );
   }
 
@@ -625,12 +692,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileHeader() {
-    final user = _authService.currentUser;
     final userName = _authService.isAuthenticated
-        ? (_userProfile?['name'] ?? user?.userMetadata?['name'] ?? 'User')
+        ? (_userProfile?['name'] ?? 'User')
         : 'GUEST';
-    final userEmail = _authService.isAuthenticated ? (user?.email ?? '') : '';
+    final userEmail = _authService.isAuthenticated 
+        ? (_userProfile?['email'] ?? '') 
+        : '';
+    final avatarUrl = _userProfile?['photo_url'] ?? _userProfile?['avatar_url'];
     final initials = _getInitials(userName);
+
+    Widget avatarWidget;
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      avatarWidget = ClipOval(
+        child: Image.network(
+          avatarUrl,
+          width: 64,
+          height: 64,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            // Fallback to initials when image fails (e.g., offline)
+            return _buildInitialsAvatar(initials);
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return _buildInitialsAvatar(initials);
+          },
+        ),
+      );
+    } else {
+      avatarWidget = _buildInitialsAvatar(initials);
+    }
 
     return Column(
       children: [
@@ -640,27 +731,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.grey[50],
-            border: Border.all(color: Colors.black.withOpacity(0.08), width: 1),
-            image: user?.userMetadata?['avatar_url'] != null
-                ? DecorationImage(
-                    image: NetworkImage(user!.userMetadata!['avatar_url']),
-                    fit: BoxFit.cover,
-                  )
-                : null,
+            border: Border.all(color: Colors.black.withValues(alpha: 0.08), width: 1),
           ),
-          child: user?.userMetadata?['avatar_url'] == null
-              ? Center(
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: 2,
-                      color: Colors.black,
-                    ),
-                  ),
-                )
-              : null,
+          child: avatarWidget,
         ),
         const SizedBox(height: 12),
         Text(
@@ -688,6 +761,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildInitialsAvatar(String initials) {
+    return Center(
+      child: Text(
+        initials,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w300,
+          letterSpacing: 2,
+          color: Colors.black,
+        ),
+      ),
+    );
+  }
+
   String _getInitials(String name) {
     final parts = name.trim().split(' ');
     if (parts.isEmpty) return '?';
@@ -700,87 +787,143 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final double itemWidth = (size.width * 0.45).clamp(160.0, 220.0);
     final double height = itemWidth * 1.6;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            children: [
-              const Text(
-                'WISHLIST',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 2.5,
-                ),
-              ),
-              const Spacer(),
-              if (_wishlist.isNotEmpty) ...[
-                TextButton(
-                  onPressed: _clearAllWishlist,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    foregroundColor: Colors.grey[500],
-                  ),
-                  child: const Text(
-                    'CLEAR',
+    return ListenableBuilder(
+      listenable: _wishlistService,
+      builder: (context, _) {
+        final wishlist = _wishlistService.products;
+        final wishlistIds = _wishlistService.productIds;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: [
+                  const Text(
+                    'WISHLIST',
                     style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 1.8,
-                      fontWeight: FontWeight.w400,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 2.5,
                     ),
                   ),
-                ),
-                TextButton(
-                  onPressed: () {
+                  const Spacer(),
+                  if (wishlist.isNotEmpty) ...[
+                    TextButton(
+                      onPressed: _clearAllWishlist,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        foregroundColor: Colors.grey[500],
+                      ),
+                      child: const Text(
+                        'CLEAR',
+                        style: TextStyle(
+                          fontSize: 10,
+                          letterSpacing: 1.8,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                WishlistScreen(initialWishlist: wishlist),
+                          ),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        foregroundColor: Colors.grey[700],
+                      ),
+                      child: const Text(
+                        'VIEW ALL',
+                        style: TextStyle(
+                          fontSize: 10,
+                          letterSpacing: 1.8,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (wishlist.isEmpty)
+              _isWishlistLoading
+                  ? _buildWishlistSkeleton(height, itemWidth)
+                  : _buildEmptyState()
+            else
+              SizedBox(
+                height: height,
+                child: _WishlistHorizontalList(
+                  products: wishlist,
+                  wishlistIds: wishlistIds,
+                  itemWidth: itemWidth,
+                  onProductTap: (product) {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) =>
-                            WishlistScreen(initialWishlist: _wishlist),
+                        builder: (context) => ProductScreen(product: product),
                       ),
                     );
                   },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    foregroundColor: Colors.grey[700],
-                  ),
-                  child: const Text(
-                    'VIEW ALL',
-                    style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 1.8,
-                      fontWeight: FontWeight.w400,
-                    ),
+                  onWishlistToggle: (productId) {
+                    _wishlistService.removeFromWishlist(productId);
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWishlistSkeleton(double height, double itemWidth) {
+    return SizedBox(
+      height: height,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: 4, // Show a few skeleton items
+        itemBuilder: (context, index) {
+          return Container(
+            width: itemWidth,
+            margin: const EdgeInsets.only(right: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Image skeleton
+                Container(
+                  height: itemWidth * 1.3,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.zero,
                   ),
                 ),
+                const SizedBox(height: 12),
+                // Brand skeleton
+                Container(
+                  height: 10,
+                  width: 60,
+                  color: Colors.grey[100],
+                ),
+                const SizedBox(height: 6),
+                // Price skeleton
+                Container(
+                  height: 12,
+                  width: 80,
+                  color: Colors.grey[100],
+                ),
               ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_wishlist.isEmpty)
-          _buildEmptyState()
-        else
-          SizedBox(
-            height: height,
-            child: _WishlistHorizontalList(
-              products: _wishlist,
-              wishlistIds: _wishlistIds,
-              itemWidth: itemWidth,
-              onProductTap: (product) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProductScreen(product: product),
-                  ),
-                );
-              },
-              onWishlistToggle: _handleWishlistToggle,
             ),
-          ),
-      ],
+          );
+        },
+      ),
     );
   }
 

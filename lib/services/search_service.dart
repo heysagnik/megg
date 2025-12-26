@@ -97,19 +97,16 @@ class SearchService {
         queryParams: params,
       );
 
-      // Parse specific browse response (ensure we pick products list, not banners)
       final root = response['data'] ?? response;
 
-      final productsPayload = (root['products'] is List)
-          ? (root['products'] as List)
-          : <dynamic>[];
+      final productsPayload =
+          (root['products'] is List) ? (root['products'] as List) : <dynamic>[];
 
       final products = productsPayload
           .whereType<Map<String, dynamic>>()
           .map(Product.fromJson)
           .toList();
 
-      // Metadata and banners
       final metadata = <String, dynamic>{};
       if (root['banners'] is List) {
         metadata['banners'] = root['banners'];
@@ -117,10 +114,8 @@ class SearchService {
       final appliedFilters =
           (root['appliedFilters'] ?? root['filters']) as Map<String, dynamic>?;
 
-      final resolvedPage =
-          _parseInt(root['page']) ?? _parseInt(response['page']) ?? page;
-      final resolvedLimit =
-          _parseInt(root['limit']) ?? _parseInt(response['limit']) ?? limit;
+      final resolvedPage = _parseInt(root['page']) ?? _parseInt(response['page']) ?? page;
+      final resolvedLimit = _parseInt(root['limit']) ?? _parseInt(response['limit']) ?? limit;
       final total = _parseInt(root['total']) ?? _parseInt(response['total']);
 
       final hasMore = _inferHasMore(
@@ -219,7 +214,7 @@ class SearchService {
 
       return [];
     } catch (e) {
-      throw Exception('Failed to fetch search suggestions: ${e.toString()}');
+      throw Exception('Failed to fetch suggestions: ${e.toString()}');
     }
   }
 

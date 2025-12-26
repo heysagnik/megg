@@ -3,8 +3,13 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import '../models/reel.dart';
+import '../models/product.dart';
 import '../services/reel_service.dart';
+import '../services/product_service.dart';
 import '../widgets/loader.dart';
+import '../widgets/product_widget.dart';
+import 'product_screen.dart';
+import 'reel_products_screen.dart';
 
 class LikedReelsScreen extends StatefulWidget {
   final int initialIndex;
@@ -239,6 +244,36 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
     }
   }
 
+  /// Handle shop button tap - show products if available
+  void _handleShopTap(Reel reel) {
+    if (reel.hasProducts) {
+      _showProductsSheet(reel);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('NO PRODUCTS LINKED'),
+            backgroundColor: Colors.black87,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Navigate to products page for this reel
+  void _showProductsSheet(Reel reel) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReelProductsScreen(
+          productIds: reel.productIds,
+          reelCategory: reel.category,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -315,7 +350,7 @@ class _LikedReelsScreenState extends State<LikedReelsScreen>
           isLiked: _likedReels.contains(reel.id),
           likeCount: _likeCounts[reel.id] ?? reel.likes,
           onLike: () => _toggleLike(reel.id),
-          onShopTap: () => _openLink(reel.affiliateLink),
+          onShopTap: () => _handleShopTap(reel),
           isCurrentPage: index == _currentPageIndex,
           isMutedDueToCall: _isMutedDueToCall,
         );
@@ -792,6 +827,205 @@ class _ActionButton extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Bottom sheet to display products linked to a reel
+class _ProductsBottomSheet extends StatefulWidget {
+  final List<String> productIds;
+  final String reelCategory;
+
+  const _ProductsBottomSheet({
+    required this.productIds,
+    required this.reelCategory,
+  });
+
+  @override
+  State<_ProductsBottomSheet> createState() => _ProductsBottomSheetState();
+}
+
+class _ProductsBottomSheetState extends State<_ProductsBottomSheet> {
+  final ProductService _productService = ProductService();
+  List<Product> _products = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      final products = await _productService.getProductsByIds(widget.productIds);
+      if (mounted) {
+        setState(() {
+          _products = products;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.of(context).size.height * 0.7;
+    
+    return Container(
+      height: height,
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom,
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'SHOP THIS LOOK',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${widget.productIds.length} ITEMS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[600],
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(PhosphorIconsRegular.x, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          // Content
+          Expanded(
+            child: _buildContent(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(child: Loader(showCaption: false));
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(PhosphorIconsRegular.warningCircle, size: 48, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'UNABLE TO LOAD PRODUCTS',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _isLoading = true;
+                    _error = null;
+                  });
+                  _loadProducts();
+                },
+                child: const Text('RETRY'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_products.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(PhosphorIconsRegular.package, size: 48, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'NO PRODUCTS FOUND',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.65,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: _products.length,
+      itemBuilder: (context, index) {
+        final product = _products[index];
+        return ProductCard(
+          product: product,
+          isListView: false,
+          onTap: () {
+            Navigator.pop(context); // Close bottom sheet
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProductScreen(product: product),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

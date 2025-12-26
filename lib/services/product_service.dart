@@ -8,6 +8,9 @@ class ProductService {
   factory ProductService() => _instance;
   ProductService._internal();
 
+  static const Duration _kProductsCacheExpiry = Duration(minutes: 10);
+  static const Duration _kDetailsCacheExpiry = Duration(minutes: 10);
+
   final ApiClient _apiClient = ApiClient();
   final CacheService _cacheService = CacheService();
 
@@ -19,9 +22,7 @@ class ProductService {
     int limit = 20,
     bool forceRefresh = false,
   }) async {
-    // Only cache the first page of "New Arrivals" (no filters)
-    final bool canCache =
-        page == 1 && category == null && color == null && search == null;
+    final bool canCache = page == 1 && category == null && color == null && search == null;
     final String cacheKey = 'products_new_arrivals_p1_l$limit';
 
     if (canCache && !forceRefresh) {
@@ -41,38 +42,39 @@ class ProductService {
       if (color != null) queryParams['color'] = color;
       if (search != null) queryParams['search'] = search;
 
-      final response = await _apiClient.get(
-        '/products',
-        queryParams: queryParams,
-      );
+      final response = await _apiClient.get('/products', queryParams: queryParams);
 
-      final data = response['data'] ?? response['products'];
+      dynamic dataWrapper;
+      if (response is Map) {
+        dataWrapper = response['data'] ?? response;
+      } else {
+        dataWrapper = response;
+      }
+
       List<Product> products = [];
+      dynamic productList;
 
-      if (data is List) {
-        products = data.map((json) => Product.fromJson(json)).toList();
-      } else if (data is Map && data['products'] is List) {
-        products = (data['products'] as List)
-            .map((json) => Product.fromJson(json))
-            .toList();
-      } else if (response['products'] is List) {
-        products = (response['products'] as List)
-            .map((json) => Product.fromJson(json))
-            .toList();
+      if (dataWrapper is List) {
+        productList = dataWrapper;
+      } else if (dataWrapper is Map) {
+        productList = dataWrapper['products'] ?? dataWrapper['data'];
+      }
+
+      if (productList is List) {
+        products = productList.map<Product>((json) => Product.fromJson(json)).toList();
       }
 
       if (canCache && products.isNotEmpty) {
         await _cacheService.setListCache(
           cacheKey,
           products.map((p) => p.toJson()).toList(),
-          expiry: const Duration(minutes: 10),
+          expiry: _kProductsCacheExpiry,
         );
       }
 
       return products;
     } catch (e) {
       if (canCache) {
-        // Try to return cached data even if expired
         final cachedData = await _cacheService.getListCache(cacheKey);
         if (cachedData != null) {
           return cachedData.map((json) => Product.fromJson(json)).toList();
@@ -88,7 +90,6 @@ class ProductService {
   }) async {
     final cacheKey = 'product_$productId';
 
-    // Check cache first (if not forcing refresh)
     if (!forceRefresh) {
       final cachedData = await _cacheService.getCache(cacheKey);
       if (cachedData != null) {
@@ -112,15 +113,13 @@ class ProductService {
           ? recommendedSource.map((json) => Product.fromJson(json)).toList()
           : <Product>[];
 
-      // Cache product details (10 minutes expiry)
       await _cacheService.setCache(cacheKey, {
         'product': product.toJson(),
         'recommended': recommended.map((p) => p.toJson()).toList(),
-      }, expiry: const Duration(minutes: 10));
+      }, expiry: _kDetailsCacheExpiry);
 
       return {'product': product, 'recommended': recommended};
     } catch (e) {
-      // Try to return cached data even if expired
       final cachedData = await _cacheService.getCache(cacheKey);
       if (cachedData != null) {
         final product = Product.fromJson(cachedData['product']);
@@ -129,7 +128,6 @@ class ProductService {
             .toList();
         return {'product': product, 'recommended': recommended};
       }
-
       throw Exception('Failed to fetch product details: ${e.toString()}');
     }
   }
@@ -144,9 +142,7 @@ class ProductService {
       }
 
       if (data is Map && data['related'] is List) {
-        return (data['related'] as List)
-            .map((json) => Product.fromJson(json))
-            .toList();
+        return (data['related'] as List).map((json) => Product.fromJson(json)).toList();
       }
 
       return [];
@@ -157,9 +153,7 @@ class ProductService {
 
   Future<List<Product>> getProductRecommendations(String productId) async {
     try {
-      final response = await _apiClient.get(
-        '/products/$productId/recommendations',
-      );
+      final response = await _apiClient.get('/products/$productId/recommendations');
       final data = response['data'];
 
       if (data is List) {
@@ -168,26 +162,18 @@ class ProductService {
 
       return [];
     } catch (e) {
-      throw Exception(
-        'Failed to fetch product recommendations: ${e.toString()}',
-      );
+      throw Exception('Failed to fetch recommendations: ${e.toString()}');
     }
   }
 
   Future<void> recordProductClick(String productId) async {
     try {
-      await _apiClient.post(
-        '/products/$productId/click',
-        body: {},
-        requiresAuth: true,
-      );
+      await _apiClient.post('/products/$productId/click', body: {}, requiresAuth: true);
     } catch (e) {
-      // Silently fail for analytics
       debugPrint('Failed to record product click: $e');
     }
   }
 
-  /// Fetches color variants for a product
   Future<List<Product>> getProductVariants(String productId) async {
     try {
       final response = await _apiClient.get('/products/$productId/variants');
@@ -202,5 +188,25 @@ class ProductService {
       debugPrint('Failed to fetch product variants: $e');
       return [];
     }
+  }
+
+  Future<List<Product>> getProductsByIds(List<String> productIds) async {
+    if (productIds.isEmpty) return [];
+
+    final futures = productIds.map((id) async {
+      try {
+        final result = await getProductDetails(id);
+        final product = result['product'];
+        if (product is Product) {
+          return product;
+        }
+      } catch (e) {
+        // Silently skip missing products (404s are expected for deleted products)
+      }
+      return null;
+    });
+
+    final results = await Future.wait(futures);
+    return results.whereType<Product>().toList();
   }
 }

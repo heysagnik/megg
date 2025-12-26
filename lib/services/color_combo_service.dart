@@ -1,20 +1,37 @@
 import '../models/color_combo.dart';
 import '../models/product.dart';
 import 'api_client.dart';
+import 'cache_service.dart';
 
 class ColorComboService {
   static final ColorComboService _instance = ColorComboService._internal();
   factory ColorComboService() => _instance;
   ColorComboService._internal();
 
-  final ApiClient _apiClient = ApiClient();
+  static const Duration _kCacheExpiry = Duration(hours: 24);
+  static const Duration _kProductsCacheExpiry = Duration(hours: 12);
+  static const Duration _kRecommendationsCacheExpiry = Duration(hours: 6);
 
-  /// Get all color combos, optionally filtered by group
-  Future<List<ColorCombo>> getColorCombos({String? group}) async {
+  final ApiClient _apiClient = ApiClient();
+  final CacheService _cacheService = CacheService();
+
+  Future<List<ColorCombo>> getColorCombos({
+    String? group,
+    bool forceRefresh = false,
+  }) async {
+    final cacheKey = group != null ? 'color_combos_$group' : 'color_combos_all';
+
+    if (!forceRefresh) {
+      final cachedData = await _cacheService.getListCache(cacheKey);
+      if (cachedData != null) {
+        return cachedData.map((json) => ColorCombo.fromJson(Map<String, dynamic>.from(json as Map))).toList();
+      }
+    }
+
     try {
       final queryParams = <String, String>{};
       if (group != null) {
-        queryParams['group'] = group;
+        queryParams['group_type'] = group;
       }
 
       final response = await _apiClient.get(
@@ -22,67 +39,123 @@ class ColorComboService {
         queryParams: queryParams.isNotEmpty ? queryParams : null,
       );
 
-      // Handle different response structures
-      final data = response['data'] ?? response['combos'] ?? response;
+      dynamic dataWrapper;
+      if (response is Map) {
+        dataWrapper = response['data'] ?? response;
+      } else {
+        dataWrapper = response;
+      }
+
+      final data = (dataWrapper is Map && (dataWrapper.containsKey('combos') || dataWrapper.containsKey('color_combos')))
+          ? (dataWrapper['combos'] ?? dataWrapper['color_combos'])
+          : dataWrapper;
 
       if (data is List) {
-        return data.map((json) => ColorCombo.fromJson(json)).toList();
+        final combos = data.map((json) => ColorCombo.fromJson(Map<String, dynamic>.from(json as Map))).toList();
+
+        await _cacheService.setListCache(
+          cacheKey,
+          combos.map((c) => c.toJson()).toList(),
+          expiry: _kCacheExpiry,
+        );
+
+        return combos;
       }
 
       return [];
     } catch (e) {
+      final cachedData = await _cacheService.getListCache(cacheKey);
+      if (cachedData != null) {
+        return cachedData.map((json) => ColorCombo.fromJson(Map<String, dynamic>.from(json as Map))).toList();
+      }
       throw Exception('Failed to fetch color combos: $e');
     }
   }
 
-  /// Get a specific color combo and its associated products
-  Future<Map<String, dynamic>> getColorComboWithProducts(String comboId) async {
-    try {
-      final response = await _apiClient.get('/color-combos/$comboId/products');
+  Future<Map<String, dynamic>> getColorComboWithProducts(
+    String comboId, {
+    bool forceRefresh = false,
+  }) async {
+    final cacheKey = 'color_combo_products_$comboId';
 
-      // Handle nested data structure: response.data.combo and response.data.products
-      final dataWrapper = response['data'] ?? response;
-      final comboData = dataWrapper['combo'];
-      final productsData = dataWrapper['products'];
-
-      if (comboData == null || productsData == null) {
-        throw Exception('Invalid response structure');
+    if (!forceRefresh) {
+      final cachedData = await _cacheService.getCache(cacheKey);
+      if (cachedData != null) {
+        final combo = ColorCombo.fromJson(Map<String, dynamic>.from(cachedData['combo'] as Map));
+        final products = (cachedData['products'] as List)
+            .map((json) => Product.fromJson(Map<String, dynamic>.from(json as Map)))
+            .toList();
+        return {'combo': combo, 'products': products};
       }
+    }
+
+    try {
+      // Use direct combo endpoint to get combo details with products
+      final response = await _apiClient.get('/color-combos/$comboId');
+
+      final dataWrapper = response['data'] ?? response;
+      final comboData = dataWrapper['combo'] ?? dataWrapper;
+      final productsData = dataWrapper['products'] ?? [];
 
       final combo = ColorCombo.fromJson(comboData);
       final products = (productsData as List)
           .map((json) => Product.fromJson(json))
           .toList();
 
+      await _cacheService.setCache(cacheKey, {
+        'combo': combo.toJson(),
+        'products': products.map((p) => p.toJson()).toList(),
+      }, expiry: _kProductsCacheExpiry);
+
       return {'combo': combo, 'products': products};
     } catch (e) {
+      final cachedData = await _cacheService.getCache(cacheKey);
+      if (cachedData != null) {
+        final combo = ColorCombo.fromJson(Map<String, dynamic>.from(cachedData['combo'] as Map));
+        final products = (cachedData['products'] as List)
+            .map((json) => Product.fromJson(Map<String, dynamic>.from(json as Map)))
+            .toList();
+        return {'combo': combo, 'products': products};
+      }
       throw Exception('Failed to fetch combo products: $e');
     }
   }
 
-  /// Get color combos by group type
-  /// Get recommended color combos based on a combo ID
   Future<List<ColorCombo>> getRecommendedCombos(String comboId) async {
+    final cacheKey = 'color_combo_recommended_$comboId';
+
+    final cachedData = await _cacheService.getListCache(cacheKey);
+    if (cachedData != null) {
+      return cachedData.map((json) => ColorCombo.fromJson(Map<String, dynamic>.from(json as Map))).toList();
+    }
+
     try {
-      final response = await _apiClient.get(
-        '/color-combos/$comboId/recommendations',
-      );
+      final response = await _apiClient.get('/color-combos/$comboId/recommendations');
 
       final data = response['data'] ?? response;
 
       if (data is List) {
-        return data.map((json) => ColorCombo.fromJson(json)).toList();
+        final combos = data.map((json) => ColorCombo.fromJson(Map<String, dynamic>.from(json as Map))).toList();
+
+        await _cacheService.setListCache(
+          cacheKey,
+          combos.map((c) => c.toJson()).toList(),
+          expiry: _kRecommendationsCacheExpiry,
+        );
+
+        return combos;
       }
 
       return [];
     } catch (e) {
-      // Return empty list instead of throwing to avoid blocking UI
       return [];
     }
   }
 
-  /// Get color combos by group type
-  Future<List<ColorCombo>> getCombosByGroup(String group) async {
-    return getColorCombos(group: group);
+  Future<List<ColorCombo>> getCombosByGroup(
+    String group, {
+    bool forceRefresh = false,
+  }) async {
+    return getColorCombos(group: group, forceRefresh: forceRefresh);
   }
 }

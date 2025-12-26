@@ -6,68 +6,86 @@ class OutfitService {
   factory OutfitService() => _instance;
   OutfitService._internal();
 
+  static const String _kOutfitsCacheKey = 'outfits_latest';
+  static const String _kDailyOutfitsCacheKey = 'daily_outfits';
+  static const Duration _kCacheExpiry = Duration(minutes: 30);
+
   final ApiClient _apiClient = ApiClient();
   final CacheService _cacheService = CacheService();
 
-  Future<List<Map<String, dynamic>>> getOutfits({
-    bool forceRefresh = false,
-  }) async {
-    const cacheKey = 'outfits_latest';
-
-    // Check cache first
+  Future<List<Map<String, dynamic>>> getOutfits({bool forceRefresh = false}) async {
     if (!forceRefresh) {
-      final cachedData = await _cacheService.getListCache(cacheKey);
+      final cachedData = await _cacheService.getListCache(_kOutfitsCacheKey);
       if (cachedData != null) {
         return cachedData;
       }
     }
+
     try {
       final response = await _apiClient.get('/outfits');
 
-     
+      dynamic dataWrapper;
+      if (response is Map) {
+        dataWrapper = response['data'] ?? response;
+      } else {
+        dataWrapper = response;
+      }
 
-      // API returns: { success: true, data: { outfits: [...] } }
-      final data = response['data'];
-      if (data != null && data is Map && data['outfits'] != null) {
-        final outfits = List<Map<String, dynamic>>.from(data['outfits']);
+      final outfitsData = (dataWrapper is Map)
+          ? (dataWrapper['outfits'] ?? dataWrapper['data'])
+          : dataWrapper;
 
-        // Cache outfits (30 minutes expiry)
-        await _cacheService.setListCache(
-          cacheKey,
-          outfits,
-          expiry: const Duration(minutes: 30),
-        );
+      if (outfitsData != null && outfitsData is List) {
+        final outfits = (outfitsData as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+        await _cacheService.setListCache(_kOutfitsCacheKey, outfits, expiry: _kCacheExpiry);
 
         return outfits;
       }
 
       return [];
     } catch (e) {
-      // Try to return cached data even if expired
-      final cachedData = await _cacheService.getListCache(cacheKey);
+      final cachedData = await _cacheService.getListCache(_kOutfitsCacheKey);
       if (cachedData != null) {
         return cachedData;
       }
-
       throw Exception('Failed to fetch outfits: ${e.toString()}');
     }
   }
 
-  Future<List<Map<String, dynamic>>> getDailyOutfits({
-    bool forceRefresh = false,
-  }) async {
-    const cacheKey = 'daily_outfits';
-
-    // Check cache first
+  Future<List<Map<String, dynamic>>> getDailyOutfits({bool forceRefresh = false}) async {
+    // Use 24-hour cache for daily outfits - works offline
+    const dailyCacheExpiry = Duration(hours: 24);
+    
     if (!forceRefresh) {
-      final cachedData = await _cacheService.getListCache(cacheKey);
+      final cachedData = await _cacheService.getListCache(_kDailyOutfitsCacheKey);
       if (cachedData != null) {
         return cachedData;
       }
     }
 
-    // Use the main getOutfits() method which returns up to 4 latest outfits
-    return getOutfits(forceRefresh: forceRefresh);
+    try {
+      // Fetch fresh data
+      final outfits = await getOutfits(forceRefresh: forceRefresh);
+      
+      // Cache with 24-hour expiry
+      if (outfits.isNotEmpty) {
+        await _cacheService.setListCache(
+          _kDailyOutfitsCacheKey, 
+          outfits, 
+          expiry: dailyCacheExpiry,
+        );
+      }
+      
+      return outfits;
+    } catch (e) {
+      // Return cached data on error (even if expired check above failed)
+      final cachedData = await _cacheService.getListCache(_kDailyOutfitsCacheKey);
+      if (cachedData != null) {
+        return cachedData;
+      }
+      rethrow;
+    }
   }
 
   Future<List<Map<String, dynamic>>> getOutfitsByColor(String color) async {
@@ -78,7 +96,7 @@ class OutfitService {
       );
 
       if (response['outfits'] != null) {
-        return List<Map<String, dynamic>>.from(response['outfits']);
+        return (response['outfits'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
 
       return [];
@@ -96,16 +114,13 @@ class OutfitService {
     }
   }
 
-  Future<Map<String, dynamic>> createOutfit(
-    Map<String, dynamic> outfitData,
-  ) async {
+  Future<Map<String, dynamic>> createOutfit(Map<String, dynamic> outfitData) async {
     try {
       final response = await _apiClient.post(
         '/outfits',
         body: outfitData,
         requiresAuth: true,
       );
-
       return response['outfit'] ?? {};
     } catch (e) {
       throw Exception('Failed to create outfit: ${e.toString()}');
@@ -117,7 +132,7 @@ class OutfitService {
       final response = await _apiClient.get('/color-combos');
 
       if (response['combos'] != null) {
-        return List<Map<String, dynamic>>.from(response['combos']);
+        return (response['combos'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
 
       return [];
@@ -131,7 +146,7 @@ class OutfitService {
       final response = await _apiClient.get('/color-combos/$comboId/outfits');
 
       if (response['outfits'] != null) {
-        return List<Map<String, dynamic>>.from(response['outfits']);
+        return (response['outfits'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
       }
 
       return [];

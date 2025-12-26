@@ -1,17 +1,10 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 class ApiConfig {
-  // Base URLs and keys loaded from .env with safe fallbacks
-  static String get baseUrl => dotenv.maybeGet('BASE_URL') ?? '';
+  // Primary API - Fast, edge-cached endpoints (use for most requests)
+  static const String baseUrl = 'https://api.megg.workers.dev/api';
   
-  static String get apiBaseUrl => '$baseUrl/api';
+  // Secondary API - For auth and user-specific operations
+  static const String vercelUrl = 'https://megg-api.vercel.app';
 
-  static String get supabaseUrl => dotenv.maybeGet('SUPABASE_URL') ?? '';
-
-  static String get supabaseAnonKey =>
-      dotenv.maybeGet('SUPABASE_ANON_KEY') ?? '';
-
-  // Constants remain compile-time where appropriate
   static const int defaultPageSize = 20;
   static const int maxPageSize = 100;
 

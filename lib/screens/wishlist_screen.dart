@@ -113,6 +113,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
     return Scaffold(
       appBar: AestheticAppBar(
         title: 'WISHLIST',
+        showBackButton: true,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),

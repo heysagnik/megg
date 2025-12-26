@@ -72,6 +72,7 @@ class _FavouriteReelsGridScreenState extends State<FavouriteReelsGridScreen> {
     return Scaffold(
       appBar: AestheticAppBar(
         title: 'FAVOURITE REELS',
+        showBackButton: true,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),

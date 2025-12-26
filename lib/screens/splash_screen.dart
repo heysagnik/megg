@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:lottie/lottie.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
-import '../config/api_config.dart';
 import '../services/auth_service.dart';
 import '../services/cache_service.dart';
 import '../services/fcm_service.dart';
 import '../services/notification_service.dart';
+import '../services/startup_service.dart';
+import '../services/wishlist_service.dart';
+import '../services/connectivity_service.dart';
+import '../services/offline_download_service.dart';
+import '../services/reel_service.dart';
+import '../services/deep_link_service.dart';
 import 'welcome_screen.dart';
 import 'main_navigation.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
-  // Track if splash was shown in this app session (resets when app is killed)
   static bool _hasShownInSession = false;
-  // Track if services are already initialized in current session
   static bool _servicesInitialized = false;
 
   @override
@@ -42,25 +43,22 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    // If splash was already shown in this session (returning from background)
     if (SplashScreen._hasShownInSession) {
       _showSplash = false;
       _animationCompleted = true;
       _initAppQuick();
     } else {
-      // Fresh app launch - show splash
       _initializeUI();
       _initApp();
       _initializeLottie();
     }
   }
 
-  // Quick initialization when returning from background
   Future<void> _initAppQuick() async {
     if (!SplashScreen._servicesInitialized) {
       await _initApp();
     } else {
-      _checkAuth();
+      await _checkAuth();
       if (mounted) {
         setState(() {
           _appInitialized = true;
@@ -72,32 +70,58 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _initApp() async {
     try {
-      // Only initialize services if not already done
       if (!SplashScreen._servicesInitialized) {
+        // Local-only services first (always work)
         await CacheService().init();
-
+        await ConnectivityService().init();
+        await OfflineDownloadService().init();
+        
+        // Firebase with timeout - don't block on network issues
         try {
-          await dotenv.load(fileName: '.env');
+          await Firebase.initializeApp().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              debugPrint('[Splash] Firebase timeout - continuing offline');
+              return Firebase.app();
+            },
+          );
         } catch (e) {
-          debugPrint('Failed to load .env: $e');
+          debugPrint('[Splash] Firebase init failed: $e');
         }
 
-        await Firebase.initializeApp();
+        // Auth can work from cache if offline
+        await AuthService().init();
+        await WishlistService().init();
+        
+        // Initialize offline sync for reel likes
+        ReelService().initOfflineSync();
+        
+        // Prefetch with timeout - optional, don't block
+        try {
+          await StartupService().prefetchData().timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => debugPrint('[Splash] Prefetch timeout'),
+          );
+        } catch (e) {
+          debugPrint('[Splash] Prefetch failed: $e');
+        }
 
-        await Supabase.initialize(
-          url: ApiConfig.supabaseUrl,
-          anonKey: ApiConfig.supabaseAnonKey,
-        );
-
-        AuthService().setupAuthListener();
-        await FCMService().initialize();
-        await NotificationService().initialize();
+        // FCM/Notifications - catch errors, don't block
+        try {
+          await FCMService().initialize().timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => debugPrint('[Splash] FCM timeout'),
+          );
+          await NotificationService().initialize();
+        } catch (e) {
+          debugPrint('[Splash] Notification init failed: $e');
+        }
 
         SplashScreen._servicesInitialized = true;
       }
 
       if (mounted) {
-        _checkAuth();
+        await _checkAuth();
         setState(() => _appInitialized = true);
         if (SplashScreen._hasShownInSession) {
           setState(() => _showSplash = false);
@@ -108,7 +132,7 @@ class _SplashScreenState extends State<SplashScreen>
     } catch (e) {
       debugPrint('App initialization failed: $e');
       if (mounted) {
-        _checkAuth();
+        await _checkAuth();
         setState(() => _appInitialized = true);
         if (SplashScreen._hasShownInSession) {
           setState(() => _showSplash = false);
@@ -119,16 +143,12 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  void _checkAuth() {
-    try {
-      final session = Supabase.instance.client.auth.currentSession;
-      if (mounted) {
-        setState(() {
-          _isAuthenticated = session != null;
-        });
-      }
-    } catch (e) {
-      _isAuthenticated = false;
+  Future<void> _checkAuth() async {
+    final isAuth = AuthService().isAuthenticated;
+    if (mounted) {
+      setState(() {
+        _isAuthenticated = isAuth;
+      });
     }
   }
 
@@ -166,6 +186,8 @@ class _SplashScreenState extends State<SplashScreen>
             statusBarIconBrightness: Brightness.dark,
           ),
         );
+        // App is now ready for deep link navigation
+        DeepLinkService().setAppReady();
       }
     });
   }
@@ -205,7 +227,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    // If splash is done, just show the app content directly
     if (!_showSplash) {
       return _isAuthenticated ? const MainNavigation() : const WelcomeScreen();
     }
@@ -214,7 +235,6 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // The App Content (Rendered behind the splash)
           if (_appInitialized)
             Positioned.fill(
               child: _isAuthenticated
@@ -222,7 +242,6 @@ class _SplashScreenState extends State<SplashScreen>
                   : const WelcomeScreen(),
             ),
 
-          // The Splash Overlay
           if (_slideAnimation != null)
             SlideTransition(
               position: _slideAnimation!,

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'dart:ui' as ui;
 import 'dart:async';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main_navigation.dart';
 import '../services/auth_service.dart';
 import '../widgets/loader.dart';
@@ -34,9 +35,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Do nothing on lifecycle changes to keep video playing
-  }
+  void didChangeAppLifecycleState(AppLifecycleState state) {}
 
   void _initializeVideo() {
     _videoController = VideoPlayerController.asset(
@@ -58,8 +57,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   void _setupAuthListener() {
-    _authSubscription = _authService.authStateChanges.listen((event) {
-      if (event.event == AuthChangeEvent.signedIn && mounted) {
+    _authSubscription = _authService.authStateChanges.listen((isAuthenticated) {
+      if (isAuthenticated && mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const MainNavigation()),
         );
@@ -68,28 +67,26 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   Future<void> _handleGoogleSignIn() async {
+    debugPrint('[MEGG:Welcome] Sign-in button pressed');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final launched = await _authService.signInWithGoogle();
+      debugPrint('[MEGG:Welcome] Calling signInWithGoogle...');
+      await _authService.signInWithGoogle();
+      debugPrint('[MEGG:Welcome] signInWithGoogle completed successfully');
 
-      if (!mounted) return;
-
-      if (launched) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('COMPLETE SIGN-IN IN THE BROWSER'),
-            duration: Duration(seconds: 3),
-            backgroundColor: Colors.black,
-          ),
-        );
+      if (!mounted) {
+        debugPrint('[MEGG:Welcome] Widget not mounted after sign-in');
+        return;
       }
 
+      debugPrint('[MEGG:Welcome] isAuthenticated: ${_authService.isAuthenticated}');
       setState(() => _isLoading = false);
     } catch (e) {
+      debugPrint('[MEGG:Welcome] Sign-in error: $e');
       if (!mounted) return;
 
       setState(() {
@@ -110,10 +107,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Fallback color
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Background Video
           if (_isVideoInitialized)
             SizedBox.expand(
               child: FittedBox(
@@ -126,15 +122,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
             )
           else
-            Container(color: Colors.black), // Placeholder while loading
-          // Glassy Overlay
+            Container(color: Colors.black),
           Positioned.fill(
             child: Container(
-              color: Colors.black.withOpacity(0.2), // Slight tint
+              color: Colors.black.withOpacity(0.2),
             ),
           ),
 
-          // Center Logo
           Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -164,7 +158,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     letterSpacing: 2.0,
                     wordSpacing: 6,
                     fontWeight: FontWeight.w400,
-                    // optionally match the logo font:
                     fontFamily: 'FuturaCyrillicBook',
                   ),
                 ),
@@ -172,7 +165,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             ),
           ),
 
-          // Error Message
           if (_errorMessage != null)
             Positioned(
               bottom: 100,
@@ -199,85 +191,130 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
             ),
 
-          // Bottom Button with Glassy Effect
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: SafeArea(
               top: false,
-              child: Container(
-                width: double.infinity,
-                height: 60,
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 20,
-                ),
-                // ClipRRect ensures the blur doesn't leak outside the button area
-                child: ClipRRect(
-                  borderRadius: BorderRadius.zero,
-                  child: Stack(
-                    children: [
-                      // The Blur Effect
-                      BackdropFilter(
-                        filter: ui.ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-                        child: Container(color: Colors.white.withOpacity(0.1)),
-                      ),
-                      // The Button Content
-                      SizedBox.expand(
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleGoogleSignIn,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.15),
-                            foregroundColor: Colors.white,
-                            shadowColor: Colors.transparent,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                              side: BorderSide(color: Colors.white30, width: 1),
-                            ),
-                            elevation: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: 60,
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.zero,
+                      child: Stack(
+                        children: [
+                          BackdropFilter(
+                            filter: ui.ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                            child: Container(color: Colors.white.withOpacity(0.1)),
                           ),
-                          child: _isLoading
-                              ? const Loader(size: 20, color: Colors.white)
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    // Make sure you add a Google logo image at assets/google_logo.png
-                                    Image.network(
-                                      'https://www.google.com/favicon.ico',
-                                      width: 20,
-                                      height: 20,
-                                      errorBuilder:
-                                          (context, error, stackTrace) {
+                          SizedBox.expand(
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _handleGoogleSignIn,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white.withOpacity(0.15),
+                                foregroundColor: Colors.white,
+                                shadowColor: Colors.transparent,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  side: BorderSide(color: Colors.white30, width: 1),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: _isLoading
+                                  ? const Loader(size: 20, color: Colors.white)
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Image.network(
+                                          'https://www.google.com/favicon.ico',
+                                          width: 20,
+                                          height: 20,
+                                          errorBuilder: (context, error, stackTrace) {
                                             return const Icon(
                                               Icons.g_mobiledata,
                                               size: 24,
                                               color: Colors.black,
                                             );
                                           },
+                                        ),
+                                        const SizedBox(width: 12),
+                                        const Text(
+                                          'CONTINUE WITH GOOGLE',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 1.0,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-
-                                    const SizedBox(width: 12),
-                                    const Text(
-                                      'CONTINUE WITH GOOGLE',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 1.0,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'By continuing, you agree to our ',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.6),
+                          letterSpacing: 0.3,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: 'Terms & Conditions',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.85),
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.white.withOpacity(0.5),
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () async {
+                                final Uri url = Uri.parse('https://example.com/terms'); // Replace with actual URL
+                                if (!await launchUrl(url)) {
+                                  // Handle error, e.g., show a snackbar
+                                  print('Could not launch $url');
+                                }
+                              },
+                          ),
+                          const TextSpan(text: ' and '),
+                          TextSpan(
+                            text: 'Privacy Policy',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.85),
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.white.withOpacity(0.5),
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () async {
+                                final Uri url = Uri.parse('https://example.com/privacy'); // Replace with actual URL
+                                if (!await launchUrl(url)) {
+                                  // Handle error, e.g., show a snackbar
+                                  print('Could not launch $url');
+                                }
+                              },
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
           ),
 
-          // Skip Button
           Positioned(
             top: -10,
             right: -10,

@@ -1,81 +1,107 @@
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class CacheService {
   static final CacheService _instance = CacheService._internal();
   factory CacheService() => _instance;
   CacheService._internal();
 
-  SharedPreferences? _prefs;
+  static const String _kCacheBoxName = 'api_cache';
+  static const String _kWishlistKey = 'wishlist_ids';
+  static const String _kRecentlyViewedKey = 'recently_viewed';
+  static const int _kMaxRecentlyViewed = 10;
+
+  Box? _cacheBox;
 
   Future<void> init() async {
-    _prefs ??= await SharedPreferences.getInstance();
+    if (_cacheBox != null) return;
+    await Hive.initFlutter();
+    _cacheBox = await Hive.openBox(_kCacheBoxName);
   }
 
-  // Cache with expiry
-  Future<void> setCache(
-    String key,
-    Map<String, dynamic> data, {
-    Duration? expiry,
-  }) async {
+  Future<Box> get _box async {
     await init();
-
-    final cacheData = {
-      'data': data,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'expiry': expiry?.inMilliseconds,
-    };
-
-    await _prefs?.setString(key, jsonEncode(cacheData));
+    return _cacheBox!;
   }
 
-  Future<Map<String, dynamic>?> getCache(String key) async {
-    await init();
+  Future<T?> getCached<T>(String key) async {
+    final box = await _box;
+    final cached = box.get(key);
+    if (cached == null) return null;
 
-    final cachedString = _prefs?.getString(key);
-    if (cachedString == null) return null;
+    if (cached is Map && cached.containsKey('timestamp') && cached.containsKey('data')) {
+      final cachedAt = DateTime.parse(cached['timestamp']);
+      final maxAgeMs = cached['maxAge'] as int?;
 
-    try {
-      final cacheData = jsonDecode(cachedString) as Map<String, dynamic>;
-      final timestamp = cacheData['timestamp'] as int;
-      final expiryMs = cacheData['expiry'] as int?;
-
-      // Check if expired
-      if (expiryMs != null) {
-        final expiredAt = timestamp + expiryMs;
-        if (DateTime.now().millisecondsSinceEpoch > expiredAt) {
-          await clearCache(key);
+      if (maxAgeMs != null) {
+        if (DateTime.now().difference(cachedAt).inMilliseconds > maxAgeMs) {
+          await box.delete(key);
           return null;
         }
       }
 
-      return cacheData['data'] as Map<String, dynamic>;
-    } catch (e) {
-      await clearCache(key);
-      return null;
+      final dynamic data = cached['data'];
+
+      if (data is T) return data;
+
+      try {
+        if (data is Map) {
+          final casted = data.cast<String, dynamic>();
+          if (casted is T) return casted as T;
+        }
+        if (data is List) {
+          final casted = data.map((e) => (e as Map).cast<String, dynamic>()).toList();
+          if (casted is T) return casted as T;
+        }
+      } catch (_) {}
+
+      try {
+        return data as T;
+      } catch (_) {
+        return null;
+      }
     }
+
+    return cached as T?;
+  }
+
+  Future<void> setCache(String key, dynamic data, {Duration? expiry}) async {
+    final box = await _box;
+    await box.put(key, {
+      'data': data,
+      'timestamp': DateTime.now().toIso8601String(),
+      'maxAge': expiry?.inMilliseconds,
+    });
   }
 
   Future<void> clearCache(String key) async {
-    await init();
-    await _prefs?.remove(key);
+    final box = await _box;
+    await box.delete(key);
   }
 
-  Future<void> clearAllCache() async {
-    await init();
-    await _prefs?.clear();
+  Future<Map<String, dynamic>?> getCache(String key) async {
+    return await getCached<Map<String, dynamic>>(key);
   }
 
-  // Wishlist-specific methods
+  Future<void> setListCache(String key, List<dynamic> data, {Duration? expiry}) async {
+    await setCache(key, data, expiry: expiry);
+  }
+
+  Future<List<Map<String, dynamic>>?> getListCache(String key) async {
+    final result = await getCached<List>(key);
+    if (result == null) return null;
+    return result.map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+
   Future<void> setWishlistIds(Set<String> ids) async {
-    await init();
-    await _prefs?.setStringList('wishlist_ids', ids.toList());
+    final box = await _box;
+    await box.put(_kWishlistKey, ids.toList());
   }
 
   Future<Set<String>> getWishlistIds() async {
-    await init();
-    final ids = _prefs?.getStringList('wishlist_ids') ?? [];
-    return Set<String>.from(ids);
+    final box = await _box;
+    final ids = box.get(_kWishlistKey);
+    if (ids == null) return {};
+    return (ids as List).cast<String>().toSet();
   }
 
   Future<void> addToWishlistCache(String productId) async {
@@ -91,94 +117,48 @@ class CacheService {
   }
 
   Future<void> clearWishlistCache() async {
-    await init();
-    await _prefs?.remove('wishlist_ids');
+    final box = await _box;
+    await box.delete(_kWishlistKey);
   }
 
-  // Generic list cache
-  Future<void> setListCache(
-    String key,
-    List<Map<String, dynamic>> data, {
-    Duration? expiry,
-  }) async {
-    await init();
-
-    final cacheData = {
-      'data': data,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'expiry': expiry?.inMilliseconds,
-    };
-
-    await _prefs?.setString(key, jsonEncode(cacheData));
+  Future<void> clearAllCache() async {
+    final box = await _box;
+    await box.clear();
   }
 
-  Future<List<Map<String, dynamic>>?> getListCache(String key) async {
-    await init();
+  Future<void> addRecentlyViewedProduct(Map<String, dynamic> product) async {
+    final box = await _box;
+    List<dynamic> current = box.get(_kRecentlyViewedKey, defaultValue: []);
 
-    final cachedString = _prefs?.getString(key);
-    if (cachedString == null) return null;
+    current.removeWhere((p) => p['id'] == product['id']);
+    current.insert(0, product);
 
-    try {
-      final cacheData = jsonDecode(cachedString) as Map<String, dynamic>;
-      final timestamp = cacheData['timestamp'] as int;
-      final expiryMs = cacheData['expiry'] as int?;
-
-      // Check if expired
-      if (expiryMs != null) {
-        final expiredAt = timestamp + expiryMs;
-        if (DateTime.now().millisecondsSinceEpoch > expiredAt) {
-          await clearCache(key);
-          return null;
-        }
-      }
-
-      return (cacheData['data'] as List).cast<Map<String, dynamic>>();
-    } catch (e) {
-      await clearCache(key);
-      return null;
+    if (current.length > _kMaxRecentlyViewed) {
+      current = current.sublist(0, _kMaxRecentlyViewed);
     }
-  }
 
-  // Recently Viewed Products
-  static const String _recentlyViewedKey = 'recently_viewed_products';
-  static const int _maxRecentlyViewed = 10;
-
-  Future<void> addRecentlyViewedProduct(
-    Map<String, dynamic> productJson,
-  ) async {
-    await init();
-
-    final existing = await getRecentlyViewedProducts();
-
-    // Remove if already exists (to move it to front)
-    existing.removeWhere((p) => p['id'] == productJson['id']);
-
-    // Add to front
-    existing.insert(0, productJson);
-
-    // Keep only last 10
-    final trimmed = existing.take(_maxRecentlyViewed).toList();
-
-    await _prefs?.setString(_recentlyViewedKey, jsonEncode(trimmed));
+    await box.put(_kRecentlyViewedKey, current);
   }
 
   Future<List<Map<String, dynamic>>> getRecentlyViewedProducts() async {
-    await init();
-
-    final cachedString = _prefs?.getString(_recentlyViewedKey);
-    if (cachedString == null) return [];
-
+    final box = await _box;
+    final data = box.get(_kRecentlyViewedKey);
+    if (data == null) return [];
     try {
-      final list = jsonDecode(cachedString) as List;
-      return list.cast<Map<String, dynamic>>();
+      // Hive stores maps as LinkedHashMap, need to cast each item
+      return (data as List).map((item) {
+        if (item is Map) {
+          return Map<String, dynamic>.from(item);
+        }
+        return <String, dynamic>{};
+      }).where((m) => m.isNotEmpty).toList();
     } catch (e) {
-      await _prefs?.remove(_recentlyViewedKey);
       return [];
     }
   }
 
   Future<void> clearRecentlyViewed() async {
-    await init();
-    await _prefs?.remove(_recentlyViewedKey);
+    final box = await _box;
+    await box.delete(_kRecentlyViewedKey);
   }
 }

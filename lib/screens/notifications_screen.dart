@@ -84,8 +84,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('UNABLE TO OPEN LINK'),
-            backgroundColor: Colors.red,
+            content: Text(
+              'UNABLE TO OPEN LINK',
+              style: TextStyle(letterSpacing: 1),
+            ),
+            backgroundColor: Colors.black,
             duration: Duration(seconds: 2),
           ),
         );
@@ -96,167 +99,332 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const AestheticAppBar(title: 'NOTIFICATIONS'),
+      backgroundColor: Colors.white,
+      appBar: const AestheticAppBar(
+        title: 'NOTIFICATIONS',
+        showBackButton: true,
+      ),
       body: Builder(
         builder: (context) {
-          if (_isLoading) {
+          if (_isLoading && _notifications.isEmpty) {
             return const Center(child: Loader());
           }
 
-          if (_error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    PhosphorIconsRegular.warningCircle,
-                    size: 48,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'UNABLE TO LOAD',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _loadNotifications,
-                    child: const Text('RETRY'),
-                  ),
-                ],
-              ),
-            );
+          if (_error != null && _notifications.isEmpty) {
+            return _buildErrorState();
           }
 
           if (_notifications.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    PhosphorIconsRegular.bellSlash,
-                    size: 64,
-                    color: Colors.grey[300],
+            return _buildEmptyState();
+          }
+
+          return _buildNotificationsList();
+        },
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.black.withOpacity(0.1),
+                  width: 1,
+                ),
+              ),
+              child: Icon(
+                PhosphorIconsRegular.warningCircle,
+                size: 40,
+                color: Colors.grey[400],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'UNABLE TO LOAD',
+              style: TextStyle(
+                fontFamily: 'FuturaCyrillicBook',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Please check your connection',
+              style: TextStyle(
+                fontFamily: 'FuturaCyrillicBook',
+                fontSize: 12,
+                color: Colors.grey[600],
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 44,
+              child: OutlinedButton(
+                onPressed: _loadNotifications,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black,
+                  side: const BorderSide(color: Colors.black, width: 1),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.zero,
                   ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'NO NOTIFICATIONS',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      letterSpacing: 2,
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                ),
+                child: const Text(
+                  'RETRY',
+                  style: TextStyle(
+                    fontFamily: 'FuturaCyrillicBook',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.black.withOpacity(0.08),
+                  width: 1,
+                ),
+              ),
+              child: Icon(
+                PhosphorIconsRegular.bellSlash,
+                size: 48,
+                color: Colors.grey[350],
+              ),
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              'NO NOTIFICATIONS',
+              style: TextStyle(
+                fontFamily: 'FuturaCyrillicBook',
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'You\'re all caught up',
+              style: TextStyle(
+                fontFamily: 'FuturaCyrillicBook',
+                fontSize: 13,
+                color: Colors.grey[600],
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationsList() {
+    return CustomRefreshIndicator(
+      onRefresh: () => _loadNotifications(loadMore: false),
+      color: Colors.black,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: _notifications.length + (_hasMore() ? 1 : 0),
+        itemBuilder: (context, index) {
+          // Load more button at bottom
+          if (index == _notifications.length) {
+            return Container(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: SizedBox(
+                  height: 40,
+                  child: OutlinedButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () => _loadNotifications(loadMore: true),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.black,
+                      side: BorderSide(
+                        color: Colors.black.withOpacity(0.2),
+                        width: 1,
+                      ),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
                     ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: Colors.black,
+                            ),
+                          )
+                        : const Text(
+                            'LOAD MORE',
+                            style: TextStyle(
+                              fontFamily: 'FuturaCyrillicBook',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
                   ),
-                ],
+                ),
               ),
             );
           }
 
-          return CustomRefreshIndicator(
-            onRefresh: () => _loadNotifications(loadMore: false),
-            color: Colors.black,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              itemCount: _notifications.length + (_hasMore() ? 1 : 0),
-              separatorBuilder: (context, index) =>
-                  Divider(height: 1, color: Colors.grey[200]),
-              itemBuilder: (context, index) {
-                // Load more indicator
-                if (index == _notifications.length) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Center(
-                      child: TextButton(
-                        onPressed: () => _loadNotifications(loadMore: true),
-                        child: const Text('LOAD MORE'),
+          final notification = _notifications[index];
+          return _buildNotificationCard(notification, index);
+        },
+      ),
+    );
+  }
+
+  Widget _buildNotificationCard(NotificationItem notification, int index) {
+    final hasLink = notification.link != null && notification.link!.isNotEmpty;
+
+    return InkWell(
+      onTap: hasLink ? () => _openLink(notification.link) : null,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(
+            color: Colors.black.withOpacity(0.08),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Bell icon with square container
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                border: Border.all(
+                  color: Colors.black,
+                  width: 1,
+                ),
+              ),
+              child: const Center(
+                child: Icon(
+                  PhosphorIconsRegular.bell,
+                  size: 20,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notification.title.toUpperCase(),
+                    style: const TextStyle(
+                      fontFamily: 'FuturaCyrillicBook',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.5,
+                      height: 1.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (notification.description.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      notification.description,
+                      style: TextStyle(
+                        fontFamily: 'FuturaCyrillicBook',
+                        fontSize: 12,
+                        color: Colors.grey[700],
+                        letterSpacing: 0.3,
+                        height: 1.5,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  );
-                }
-
-                final notification = _notifications[index];
-
-                return InkWell(
-                  onTap:
-                      notification.link != null && notification.link!.isNotEmpty
-                      ? () => _openLink(notification.link)
-                      : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                  ],
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text(
+                        _formatTimeAgo(notification.createdAt).toUpperCase(),
+                        style: TextStyle(
+                          fontFamily: 'FuturaCyrillicBook',
+                          fontSize: 10,
+                          color: Colors.grey[500],
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      if (hasLink) ...[
+                        const SizedBox(width: 12),
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          width: 3,
+                          height: 3,
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.grey[400],
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            PhosphorIconsRegular.bell,
-                            size: 20,
-                            color: Colors.black,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'TAP TO VIEW',
+                          style: TextStyle(
+                            fontFamily: 'FuturaCyrillicBook',
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                            letterSpacing: 1,
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                notification.title.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              if (notification.description.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  notification.description,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[700],
-                                    letterSpacing: 0.3,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 8),
-                              Text(
-                                _formatTimeAgo(notification.createdAt),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey[500],
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (notification.link != null &&
-                            notification.link!.isNotEmpty)
-                          Icon(
-                            PhosphorIconsRegular.caretRight,
-                            size: 16,
-                            color: Colors.grey[400],
-                          ),
                       ],
-                    ),
+                    ],
                   ),
-                );
-              },
+                ],
+              ),
             ),
-          );
-        },
+            // Arrow indicator for links
+            if (hasLink) ...[
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Icon(
+                  PhosphorIconsRegular.arrowRight,
+                  size: 16,
+                  color: Colors.grey[400],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

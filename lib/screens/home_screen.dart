@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:megg/screens/search_screen.dart';
+import 'package:megg/screens/notifications_screen.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'dart:async';
 import '../models/product.dart';
+import '../models/color_combo.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../widgets/product_widget.dart';
 import '../services/trending_service.dart';
@@ -10,10 +12,12 @@ import '../services/product_service.dart';
 import '../services/outfit_service.dart';
 import '../services/wishlist_service.dart';
 import '../services/cache_service.dart';
+import '../services/color_combo_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'product_screen.dart';
 import 'search_results_screen.dart';
 import 'color_combo_list_screen.dart';
+import 'outfit_products_screen.dart';
 import '../widgets/loader.dart';
 import '../widgets/custom_refresh_indicator.dart';
 
@@ -30,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final OutfitService _outfitService = OutfitService();
   final WishlistService _wishlistService = WishlistService();
   final CacheService _cacheService = CacheService();
+  final ColorComboService _colorComboService = ColorComboService();
 
   List<Product> _trendingProducts = [];
   List<Product> _newArrivals = [];
@@ -79,7 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadHomeData({bool forceRefresh = false}) async {
-    // Only show full screen loader if we have no data and it's not a refresh
     if (!forceRefresh &&
         _dailyOutfits.isEmpty &&
         _trendingProducts.isEmpty &&
@@ -98,12 +102,24 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       setState(() => _isScreenLoading = false);
     }
+
+    _prefetchColorCombos();
+  }
+
+  void _prefetchColorCombos() {
+    final groups = ['formal', 'casual', 'winter', 'layering'];
+    for (final group in groups) {
+      _colorComboService.getColorCombos(group: group).catchError((_) => <ColorCombo>[]);
+    }
   }
 
   Future<void> _loadRecentlyViewed() async {
     try {
+      debugPrint('[Home] Loading recently viewed...');
       final recentlyViewedMaps = await _cacheService
           .getRecentlyViewedProducts();
+      
+      debugPrint('[Home] Got ${recentlyViewedMaps.length} recently viewed maps');
 
       if (!mounted) return;
 
@@ -112,12 +128,15 @@ class _HomeScreenState extends State<HomeScreen> {
             try {
               return Product.fromJson(map);
             } catch (e) {
+              debugPrint('[Home] Error parsing product: $e');
               return null;
             }
           })
           .whereType<Product>()
           .toList();
 
+      debugPrint('[Home] Parsed ${products.length} recently viewed products');
+      
       setState(() {
         _recentlyViewedProducts = products;
       });
@@ -130,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } catch (e) {
-      // Silently fail
+      debugPrint('[Home] Error loading recently viewed: $e');
     }
   }
 
@@ -404,6 +423,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AestheticAppBar(
         title: 'MEGG',
+        leading: IconButton(
+          icon: Icon(PhosphorIconsRegular.bell, size: 20),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const NotificationsScreen(),
+              ),
+            );
+          },
+          splashRadius: 20,
+        ),
         actions: [
           IconButton(
             icon: Icon(PhosphorIconsRegular.magnifyingGlass, size: 20),
@@ -470,7 +501,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   builder: (context) =>
                                       ProductScreen(product: product),
                                 ),
-                              );
+                              ).then((_) => _loadRecentlyViewed());
                             },
                             isWishlisted: _homeWishlist.contains(product.id),
                             pageController:
@@ -537,12 +568,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemBuilder: (context, index) {
                   final outfit = _dailyOutfits[index];
                   final imageUrl = (outfit['banner_image'] as String?) ?? '';
-                  final title = (outfit['title'] as String? ?? 'Outfit')
-                      .toUpperCase();
-                  final affiliateLink = outfit['affiliate_link'] as String?;
+                  final title = (outfit['title'] as String? ?? 'Outfit');
+                  final productIds = (outfit['product_ids'] as List<dynamic>?)
+                      ?.map((e) => e.toString())
+                      .toList() ?? [];
 
                   return GestureDetector(
-                    onTap: () => _openAffiliateLink(affiliateLink),
+                    onTap: () => _openOutfitProducts(
+                      title: title,
+                      productIds: productIds,
+                      bannerImage: imageUrl,
+                    ),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -574,7 +610,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           right: 24,
                           bottom: 40,
                           child: Text(
-                            title,
+                            title.toUpperCase(),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 28,
@@ -612,6 +648,33 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  void _openOutfitProducts({
+    required String title,
+    required List<String> productIds,
+    String? bannerImage,
+  }) {
+    if (productIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('NO PRODUCTS IN THIS OUTFIT'),
+          backgroundColor: Colors.black,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OutfitProductsScreen(
+          outfitTitle: title,
+          productIds: productIds,
+        ),
       ),
     );
   }
@@ -685,10 +748,10 @@ class _HomeScreenState extends State<HomeScreen> {
         'icon': PhosphorIconsRegular.snowflake,
       },
       {
-        'name': 'SUMMER',
-        'label': 'S',
-        'group': 'summer',
-        'icon': PhosphorIconsRegular.sun,
+        'name': 'LAYERING',
+        'label': 'L',
+        'group': 'layering',
+        'icon': PhosphorIconsRegular.coatHanger,
       },
     ];
 
@@ -929,7 +992,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         MaterialPageRoute(
                           builder: (context) => ProductScreen(product: product),
                         ),
-                      );
+                      ).then((_) => _loadRecentlyViewed());
                     },
                     isWishlisted: _homeWishlist.contains(product.id),
                     pageController: _trendingPageControllers[product.id],

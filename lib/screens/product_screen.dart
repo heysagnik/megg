@@ -70,8 +70,12 @@ class _ProductScreenState extends State<ProductScreen> {
 
   Future<void> _saveToRecentlyViewed() async {
     try {
+      debugPrint('[Product] Saving ${widget.product.id} to recently viewed');
       await CacheService().addRecentlyViewedProduct(widget.product.toJson());
-    } catch (_) {}
+      debugPrint('[Product] Saved successfully');
+    } catch (e) {
+      debugPrint('[Product] Error saving to recently viewed: $e');
+    }
   }
 
   Future<void> _checkWishlistStatus() async {
@@ -675,6 +679,11 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _buildDescription() {
+    final description = widget.product.description;
+    if (description == null || description.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
@@ -691,7 +700,7 @@ class _ProductScreenState extends State<ProductScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            widget.product.description,
+            description,
             style: TextStyle(
               fontSize: 14,
               height: 1.7,
@@ -788,8 +797,28 @@ class _ProductScreenState extends State<ProductScreen> {
           height: 54,
           child: ElevatedButton(
             onPressed: () async {
+              final affiliateLink = widget.product.affiliateLink;
+              if (affiliateLink == null || affiliateLink.isEmpty) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text(
+                        'No purchase link available',
+                        style: TextStyle(letterSpacing: 0.5),
+                      ),
+                      backgroundColor: Colors.black,
+                      behavior: SnackBarBehavior.floating,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                  );
+                }
+                return;
+              }
+              
               await ProductService().recordProductClick(widget.product.id);
-              final url = Uri.parse(widget.product.affiliateLink);
+              final url = Uri.parse(affiliateLink);
               if (await canLaunchUrl(url)) {
                 await launchUrl(url, mode: LaunchMode.externalApplication);
               } else {

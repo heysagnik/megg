@@ -8,7 +8,9 @@ import '../services/search_history_service.dart';
 import 'search_results_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final String initialQuery;
+  
+  const SearchScreen({super.key, this.initialQuery = ''});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -37,6 +39,13 @@ class _SearchScreenState extends State<SearchScreen>
   @override
   void initState() {
     super.initState();
+
+    if (widget.initialQuery.isNotEmpty) {
+      _controller.text = widget.initialQuery;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fetchSuggestions(widget.initialQuery);
+      });
+    }
 
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 2500),
@@ -139,7 +148,7 @@ class _SearchScreenState extends State<SearchScreen>
 
   void _performSearch(String query) {
     _historyService.addSearchQuery(query);
-    Navigator.pushReplacement(
+    Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SearchResultsScreen(initialQuery: query),

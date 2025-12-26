@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
 import '../services/auth_service.dart';
+import '../services/wishlist_service.dart';
 import 'login_required_dialog.dart';
 
 // ============================================================================
@@ -167,7 +168,6 @@ class _ProductCardState extends State<ProductCard>
   int _currentImageIndex = 0;
   bool _isInitialBuild =
       true; // Track initial build to prevent animation on load
-  // Pulse ring removed per request
 
   @override
   void initState() {
@@ -209,8 +209,6 @@ class _ProductCardState extends State<ProductCard>
         _animationController.reset();
       }
     });
-
-    // Pulse ring removed
   }
 
   @override
@@ -283,6 +281,10 @@ class _ProductCardState extends State<ProductCard>
       widget.onDoubleTap!();
     }
 
+    // Use WishlistService.toggleWishlist with Product for optimistic update
+    WishlistService().toggleWishlist(widget.product.id, product: widget.product);
+
+    // Notify parent about wishlist change so small heart icon updates
     if (widget.onWishlistToggle != null) {
       widget.onWishlistToggle!(widget.product.id);
     }
@@ -302,10 +304,15 @@ class _ProductCardState extends State<ProductCard>
       return;
     }
 
+    // Use WishlistService.toggleWishlist with Product for optimistic update
+    WishlistService().toggleWishlist(widget.product.id, product: widget.product);
+
+    // Notify parent about wishlist change so small heart icon updates
     if (widget.onWishlistToggle != null) {
       widget.onWishlistToggle!(widget.product.id);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -427,10 +434,14 @@ class _ProductCardState extends State<ProductCard>
                   // Always visible for accessibility; hover still scales icon
                   opacity: 1.0,
                   child: GestureDetector(
-                    onTap: _handleWishlistTap,
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      print('[MEGG:ProductCard] List view heart tapped!');
+                      _handleWishlistTap();
+                    },
                     child: Container(
-                      width: 36,
-                      height: 36,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.95),
                         shape: BoxShape.circle,
@@ -463,7 +474,7 @@ class _ProductCardState extends State<ProductCard>
                                 widget.isWishlisted
                                     ? PhosphorIconsFill.heart
                                     : PhosphorIconsRegular.heart,
-                                size: 14,
+                                size: 16,
                                 color: widget.isWishlisted
                                     ? Colors.red
                                     : Colors.black.withOpacity(0.7),
@@ -590,10 +601,14 @@ class _ProductCardState extends State<ProductCard>
                           bottom: 8,
                           right: 8,
                           child: GestureDetector(
-                            onTap: _handleWishlistTap,
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              print('[MEGG:ProductCard] Heart tapped!');
+                              _handleWishlistTap();
+                            },
                             child: Container(
-                              width: 32,
-                              height: 32,
+                              width: 40,
+                              height: 40,
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 shape: BoxShape.circle,
@@ -607,7 +622,7 @@ class _ProductCardState extends State<ProductCard>
                                   widget.isWishlisted
                                       ? PhosphorIconsFill.heart
                                       : PhosphorIconsRegular.heart,
-                                  size: 14,
+                                  size: 16,
                                   color: widget.isWishlisted
                                       ? Colors.red
                                       : Colors.black,

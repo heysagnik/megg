@@ -1,21 +1,23 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'cache_service.dart';
 
 class SearchHistoryService {
-  static final SearchHistoryService _instance =
-      SearchHistoryService._internal();
+  static final SearchHistoryService _instance = SearchHistoryService._internal();
   factory SearchHistoryService() => _instance;
   SearchHistoryService._internal();
 
-  static const String _searchHistoryKey = 'search_history';
-  static const int _maxDisplayedItems = 3;
-  static const int _maxStoredItems = 10;
+  static const String _kSearchHistoryKey = 'search_history';
+  static const int _kMaxDisplayedItems = 5;
+  static const int _kMaxStoredItems = 10;
+
+  final CacheService _cacheService = CacheService();
 
   Future<List<String>> getSearchHistory() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final history = prefs.getStringList(_searchHistoryKey) ?? [];
-      final displayed = history.take(_maxDisplayedItems).toList();
-      return displayed;
+      final history = await _cacheService.getCached<List>(_kSearchHistoryKey);
+      if (history == null) return [];
+
+      final casted = history.cast<String>();
+      return casted.take(_kMaxDisplayedItems).toList();
     } catch (_) {
       return [];
     }
@@ -26,36 +28,30 @@ class SearchHistoryService {
     if (trimmedQuery.isEmpty) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final history = prefs.getStringList(_searchHistoryKey) ?? [];
+      final historyRaw = await _cacheService.getCached<List>(_kSearchHistoryKey) ?? [];
+      final history = historyRaw.cast<String>().toList();
 
       history.remove(trimmedQuery);
       history.insert(0, trimmedQuery);
 
-      if (history.length > _maxStoredItems) {
-        history.removeRange(_maxStoredItems, history.length);
+      if (history.length > _kMaxStoredItems) {
+        history.removeRange(_kMaxStoredItems, history.length);
       }
 
-      await prefs.setStringList(_searchHistoryKey, history);
-      print('Search query saved. Updated history: $history');
-    } catch (e) {
-      print('Error saving search query: $e');
-    }
+      await _cacheService.setCache(_kSearchHistoryKey, history);
+    } catch (_) {}
   }
 
   Future<void> clearHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_searchHistoryKey);
-    } catch (_) {}
+    await _cacheService.clearCache(_kSearchHistoryKey);
   }
 
   Future<void> removeSearchQuery(String query) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final history = prefs.getStringList(_searchHistoryKey) ?? [];
+      final historyRaw = await _cacheService.getCached<List>(_kSearchHistoryKey) ?? [];
+      final history = historyRaw.cast<String>().toList();
       history.remove(query);
-      await prefs.setStringList(_searchHistoryKey, history);
+      await _cacheService.setCache(_kSearchHistoryKey, history);
     } catch (_) {}
   }
 }

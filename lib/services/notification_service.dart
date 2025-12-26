@@ -1,195 +1,171 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
+import '../config/api_config.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  SupabaseClient get _supabase => Supabase.instance.client;
-  RealtimeChannel? _channel;
+  static const String _kNotificationPrefKey = 'notifications_enabled';
+  static const String _kPermissionAskedKey = 'notification_permission_asked';
+  static const Duration _kNetworkTimeout = Duration(seconds: 15);
+
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: _kNetworkTimeout,
+    receiveTimeout: _kNetworkTimeout,
+  ));
+
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   bool _notificationsEnabled = true;
-
-  static const String _notificationPrefKey = 'notifications_enabled';
 
   bool get notificationsEnabled => _notificationsEnabled;
 
   Future<List<Map<String, dynamic>>> fetchNotifications() async {
     try {
-      final response = await _supabase
-          .from('notifications')
-          .select()
-          .order('created_at', ascending: false)
-          .limit(50);
+      final response = await _dio.get(
+        '${ApiConfig.vercelUrl}/api/notifications',
+        options: Options(headers: {'Accept': 'application/json'}),
+      );
 
-      return List<Map<String, dynamic>>.from(response);
+      if (response.data is List) {
+        return List<Map<String, dynamic>>.from(response.data);
+      } else if (response.data is Map && response.data['data'] != null) {
+        return List<Map<String, dynamic>>.from(response.data['data']);
+      }
+      return [];
     } catch (e) {
-      throw Exception('Failed to load notifications');
+      debugPrint('[NotificationService] Failed to fetch: $e');
+      return [];
     }
   }
 
   Future<void> initialize() async {
     await _loadNotificationPreference();
-
-    if (!_notificationsEnabled) return;
-
-    _channel = _supabase
-        .channel('public:notifications')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'notifications',
-          callback: (payload) {
-            if (!_notificationsEnabled) return;
-
-            final newRow = payload.newRecord;
-            final title = newRow['title'] as String?;
-            final description = newRow['description'] as String?;
-            final link = newRow['link'] as String?;
-
-            if (title != null && description != null) {
-              _showInAppNotification(title, description, link);
-            }
-          },
-        )
-        .subscribe();
   }
 
   Future<void> showPermissionDialogIfNeeded(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
-    final hasAskedBefore =
-        prefs.getBool('notification_permission_asked') ?? false;
+    final hasAskedBefore = prefs.getBool(_kPermissionAskedKey) ?? false;
 
     if (hasAskedBefore) return;
 
-    await prefs.setBool('notification_permission_asked', true);
+    await prefs.setBool(_kPermissionAskedKey, true);
 
     if (!context.mounted) return;
 
     final shouldEnable = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.05),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  PhosphorIconsRegular.bell,
-                  size: 32,
-                  color: Colors.black,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'ENABLE NOTIFICATIONS',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 2,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Stay updated with new arrivals, exclusive offers, and style tips.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.6,
-                  color: Colors.grey[700],
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                  child: const Text(
-                    'ENABLE',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(
-                  'NOT NOW',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.5,
-                    color: Colors.grey[700],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (context) => _buildPermissionDialog(context),
     );
 
     if (shouldEnable == true) {
       _notificationsEnabled = true;
-      await prefs.setBool(_notificationPrefKey, true);
-      // Initialize realtime if not already done
-      if (_channel == null) {
-        initialize();
-      }
+      await prefs.setBool(_kNotificationPrefKey, true);
     } else {
       _notificationsEnabled = false;
-      await prefs.setBool(_notificationPrefKey, false);
-      _channel?.unsubscribe();
-      _channel = null;
+      await prefs.setBool(_kNotificationPrefKey, false);
     }
+  }
+
+  Widget _buildPermissionDialog(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.05),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                PhosphorIconsRegular.bell,
+                size: 32,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'ENABLE NOTIFICATIONS',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 2,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Stay updated with new arrivals, exclusive offers, and style tips.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.6,
+                color: Colors.grey[700],
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                ),
+                child: const Text(
+                  'ENABLE',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'NOT NOW',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1.5,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _loadNotificationPreference() async {
     final prefs = await SharedPreferences.getInstance();
-    _notificationsEnabled = prefs.getBool(_notificationPrefKey) ?? true;
+    _notificationsEnabled = prefs.getBool(_kNotificationPrefKey) ?? true;
   }
 
   Future<void> setNotificationsEnabled(bool enabled) async {
     _notificationsEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_notificationPrefKey, enabled);
-
-    if (enabled && _channel == null) {
-      initialize();
-    } else if (!enabled && _channel != null) {
-      _channel?.unsubscribe();
-      _channel = null;
-    }
+    await prefs.setBool(_kNotificationPrefKey, enabled);
   }
 
-  void _showInAppNotification(String title, String description, String? link) {
+  void showInAppNotification(String title, String description, String? link) {
     final context = navigatorKey.currentContext;
     if (context == null || !context.mounted) return;
 
@@ -214,10 +190,7 @@ class NotificationService {
     });
   }
 
-  void dispose() {
-    _channel?.unsubscribe();
-    _channel = null;
-  }
+  void dispose() {}
 }
 
 class _NotificationBanner extends StatefulWidget {
@@ -282,9 +255,7 @@ class _NotificationBannerState extends State<_NotificationBanner>
         if (canLaunch) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
-      } catch (e) {
-        // Silently fail if link is invalid
-      }
+      } catch (_) {}
     }
     _handleDismiss();
   }
@@ -310,12 +281,12 @@ class _NotificationBannerState extends State<_NotificationBanner>
                     decoration: BoxDecoration(
                       color: Colors.black,
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         width: 1,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
+                          color: Colors.black.withValues(alpha: 0.3),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -328,7 +299,7 @@ class _NotificationBannerState extends State<_NotificationBanner>
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
@@ -358,7 +329,7 @@ class _NotificationBannerState extends State<_NotificationBanner>
                                 Text(
                                   widget.description,
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.8),
+                                    color: Colors.white.withValues(alpha: 0.8),
                                     fontSize: 12,
                                     letterSpacing: 0.3,
                                     height: 1.4,
@@ -374,7 +345,7 @@ class _NotificationBannerState extends State<_NotificationBanner>
                             onTap: _handleDismiss,
                             child: Icon(
                               PhosphorIconsRegular.x,
-                              color: Colors.white.withOpacity(0.6),
+                              color: Colors.white.withValues(alpha: 0.6),
                               size: 18,
                             ),
                           ),

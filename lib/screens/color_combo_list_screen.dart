@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/color_combo.dart';
 import '../services/color_combo_service.dart';
+import '../services/connectivity_service.dart';
+import '../services/offline_download_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../widgets/loader.dart';
+import '../widgets/offline_banner.dart';
 import 'color_combo_detail_screen.dart';
 
 class ColorComboListScreen extends StatefulWidget {
@@ -19,7 +23,9 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
   final ColorComboService _comboService = ColorComboService();
 
   List<ColorCombo> _combos = [];
+  Map<String, String> _localImagePaths = {}; // comboId -> local path
   bool _isLoading = true;
+  bool _isOfflineMode = false;
   String? _error;
 
   @override
@@ -33,16 +39,43 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
       setState(() {
         _isLoading = true;
         _error = null;
+        _isOfflineMode = false;
       });
 
-      final combos = await _comboService.getCombosByGroup(widget.groupType);
+      final hasOfflineContent = OfflineDownloadService().isOfflineModeEnabled;
+      
+      if (hasOfflineContent) {
+        debugPrint('[ComboList] Using local-first: loading from offline cache');
+        await _loadOfflineCombos();
+        return;
+      }
 
-      if (!mounted) return;
+      // No local content, try network
+      final isOffline = ConnectivityService().isOffline;
+      if (isOffline) {
+        setState(() {
+          _isLoading = false;
+          _error = 'No internet connection and no offline content available';
+        });
+        return;
+      }
 
-      setState(() {
-        _combos = combos;
-        _isLoading = false;
-      });
+      try {
+        final combos = await _comboService.getCombosByGroup(widget.groupType);
+
+        if (!mounted) return;
+
+        setState(() {
+          _combos = combos;
+          _isLoading = false;
+        });
+      } catch (e) {
+        debugPrint('[ComboList] Network failed: $e');
+        setState(() {
+          _isLoading = false;
+          _error = 'Failed to load color combos';
+        });
+      }
     } catch (e) {
       if (!mounted) return;
 
@@ -51,6 +84,47 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
         _error = e.toString().replaceAll('Exception: ', '');
       });
     }
+  }
+
+  Future<void> _loadOfflineCombos() async {
+    final offlineCombos = await OfflineDownloadService().getOfflineCombos();
+    
+    if (offlineCombos.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Color combos not available offline';
+      });
+      return;
+    }
+
+    // Filter by group type if applicable
+    final filteredCombos = offlineCombos.where((c) {
+      final group = c['group_type'] ?? c['occasion'] ?? '';
+      return group.toString().toLowerCase() == widget.groupType.toLowerCase();
+    }).toList();
+
+    // Build local image paths map
+    final localPaths = <String, String>{};
+    for (final combo in filteredCombos) {
+      final id = combo['id'] as String;
+      final localPath = combo['local_image_path'] as String?;
+      if (localPath != null) {
+        localPaths[id] = localPath;
+      }
+    }
+
+    // Convert to ColorCombo objects
+    final combos = filteredCombos.map((c) => ColorCombo.fromJson(c)).toList();
+
+    if (!mounted) return;
+
+    setState(() {
+      _combos = combos;
+      _localImagePaths = localPaths;
+      _isLoading = false;
+      _isOfflineMode = true;
+    });
   }
 
   @override
@@ -175,6 +249,9 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
         combo.colorB ??
         (combo.comboColors.isNotEmpty ? combo.comboColors.first : null);
 
+    // Check for local image path (offline mode)
+    final localImagePath = _localImagePaths[combo.id];
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -186,38 +263,14 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.black.withOpacity(0.08), width: 1),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.08), width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Model Image
             Expanded(
-              child: combo.modelImage.isNotEmpty
-                  ? Image.network(
-                      combo.modelImage,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          width: double.infinity,
-                          color: Colors.grey[100],
-                          child: Icon(
-                            PhosphorIconsRegular.image,
-                            color: Colors.grey[400],
-                            size: 40,
-                          ),
-                        );
-                      },
-                    )
-                  : Container(
-                      color: Colors.grey[100],
-                      child: Icon(
-                        PhosphorIconsRegular.palette,
-                        color: Colors.grey[400],
-                        size: 40,
-                      ),
-                    ),
+              child: _buildComboImage(combo, localImagePath),
             ),
 
             // Color Swatches & Names (Vertical)
@@ -244,6 +297,46 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildComboImage(ColorCombo combo, String? localImagePath) {
+    // Use local image if available (offline mode)
+    if (localImagePath != null && File(localImagePath).existsSync()) {
+      return Image.file(
+        File(localImagePath),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildPlaceholderImage();
+        },
+      );
+    }
+
+    // Use network image
+    if (combo.modelImage.isNotEmpty) {
+      return Image.network(
+        combo.modelImage,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildPlaceholderImage();
+        },
+      );
+    }
+
+    return _buildPlaceholderImage();
+  }
+
+  Widget _buildPlaceholderImage() {
+    return Container(
+      width: double.infinity,
+      color: Colors.grey[100],
+      child: Icon(
+        PhosphorIconsRegular.palette,
+        color: Colors.grey[400],
+        size: 40,
       ),
     );
   }
