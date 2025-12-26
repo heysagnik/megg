@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/ai_service.dart';
 import '../widgets/loader.dart';
 import 'ai_results_screen.dart';
@@ -20,11 +21,31 @@ class _AICameraScreenState extends State<AICameraScreen> {
   bool _isInitialized = false;
   bool _isProcessing = false;
   bool _flashOn = false;
+  bool _showOnboardingTip = false; //TODO false
+
+  static const String _onboardingSeenKey = 'ai_camera_onboarding_seen';
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
+    _checkOnboardingStatus();
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeen = prefs.getBool(_onboardingSeenKey) ?? false;
+    if (!hasSeen && mounted) {
+      setState(() => _showOnboardingTip = true);
+    }
+  }
+
+  Future<void> _dismissOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingSeenKey, true);
+    if (mounted) {
+      setState(() => _showOnboardingTip = false);
+    }
   }
 
   Future<void> _initializeCamera() async {
@@ -323,6 +344,111 @@ class _AICameraScreenState extends State<AICameraScreen> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Onboarding Tooltip (first-time users)
+          if (_showOnboardingTip && !_isProcessing)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _dismissOnboarding,
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.7),
+                  child: SafeArea(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Animated entrance
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOutBack,
+                          builder: (context, value, child) {
+                            return Transform.scale(
+                              scale: value,
+                              child: Opacity(
+                                opacity: value.clamp(0.0, 1.0),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 32),
+                            padding: const EdgeInsets.all(28),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Icon
+                                Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(28),
+                                  ),
+                                  child: const Icon(
+                                    PhosphorIconsRegular.tShirt,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                // Title
+                                const Text(
+                                  'FIND YOUR PERFECT MATCH',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 2,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Description
+                                Text(
+                                  'Got a shirt but unsure what to pair it with?\n\nSnap a photo of your clothing and we\'ll suggest perfectly matching pieces to complete your look.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    height: 1.6,
+                                    color: Colors.grey[700],
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                // CTA Button
+                                Container(
+                                  width: double.infinity,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'GOT IT',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

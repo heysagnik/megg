@@ -266,9 +266,9 @@ class _AIResultsScreenState extends State<AIResultsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'SUGGESTED COLORS',
-                    style: TextStyle(
+                  Text(
+                    'SUGGESTED ${result.targetCategoryType.toUpperCase()} COLORS',
+                    style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
                       letterSpacing: 1.5,

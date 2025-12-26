@@ -8,6 +8,7 @@ class AIAnalysisResult {
   final String category;
   final List<String> matchingColors;
   final List<String> targetCategories;
+  final String targetCategoryType;
   final List<Product> products;
 
   AIAnalysisResult({
@@ -17,6 +18,7 @@ class AIAnalysisResult {
     required this.category,
     required this.matchingColors,
     required this.targetCategories,
+    required this.targetCategoryType,
     required this.products,
   });
 
@@ -37,6 +39,7 @@ class AIAnalysisResult {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      targetCategoryType: analysis['target_category_type'] as String? ?? 'mixed',
       products: productsList.map((p) => Product.fromJson(p)).toList(),
     );
   }
