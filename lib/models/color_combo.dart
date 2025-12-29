@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class ColorCombo {
   final String id;
   final String name;
@@ -26,6 +28,48 @@ class ColorCombo {
     required this.createdAt,
   });
 
+  /// Parses the model_image JSON string and returns the image URLs map
+  Map<String, String>? get modelImageUrls {
+    if (modelImage.isEmpty) return null;
+    try {
+      final decoded = json.decode(modelImage);
+      if (decoded is Map) {
+        return Map<String, String>.from(decoded);
+      }
+    } catch (_) {
+      // If parsing fails, modelImage might be a direct URL (legacy format)
+    }
+    return null;
+  }
+
+  /// Returns the thumbnail image URL (smallest size)
+  String get modelImageThumb {
+    final urls = modelImageUrls;
+    if (urls != null && urls['thumb'] != null) {
+      return urls['thumb']!;
+    }
+    // Fall back to raw modelImage for legacy support
+    return modelImage;
+  }
+
+  /// Returns the medium image URL
+  String get modelImageMedium {
+    final urls = modelImageUrls;
+    if (urls != null && urls['medium'] != null) {
+      return urls['medium']!;
+    }
+    return modelImage;
+  }
+
+  /// Returns the large image URL (full size)
+  String get modelImageLarge {
+    final urls = modelImageUrls;
+    if (urls != null && urls['large'] != null) {
+      return urls['large']!;
+    }
+    return modelImage;
+  }
+
   factory ColorCombo.fromJson(Map<String, dynamic> json) {
     // Support both legacy and new API shapes
     final legacyPrimary = json['primary_color'] as String?;
@@ -47,7 +91,7 @@ class ColorCombo {
       colorA: newColorA,
       colorB: newColorB,
       groupType: json['group_type'] as String? ?? 'casual',
-      modelImage: json['model_image'] as String? ?? '',
+      modelImage: _parseModelImage(json['model_image']),
       productIds:
           (json['product_ids'] as List<dynamic>?)
               ?.map((e) => e.toString())
@@ -74,5 +118,18 @@ class ColorCombo {
       'product_ids': productIds,
       'created_at': createdAt.toIso8601String(),
     };
+  }
+
+  static String _parseModelImage(dynamic image) {
+    if (image == null) return '';
+    if (image is String) return image;
+    if (image is Map) {
+      try {
+        return json.encode(image);
+      } catch (_) {
+        return '';
+      }
+    }
+    return '';
   }
 }

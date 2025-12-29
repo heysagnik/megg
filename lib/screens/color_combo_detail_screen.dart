@@ -280,7 +280,7 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
   }
 
   Widget _buildModelImage() {
-    if (_combo!.modelImage.isEmpty) {
+    if (_combo!.modelImageLarge.isEmpty) {
       return Container(
         width: double.infinity,
         height: 400,
@@ -322,7 +322,7 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
 
   Widget _buildNetworkImage() {
     return Image.network(
-      _combo!.modelImage,
+      _combo!.modelImageLarge,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
         return Container(

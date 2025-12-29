@@ -239,7 +239,22 @@ class OfflineDownloadService extends ChangeNotifier {
 
       final combo = data[i];
       final id = combo['id'] as String;
-      final modelImageUrl = combo['model_image'] as String?;
+      final modelImageRaw = combo['model_image'] as String?;
+
+      // Parse the model_image JSON to get the actual image URL
+      String? modelImageUrl;
+      if (modelImageRaw != null && modelImageRaw.isNotEmpty) {
+        try {
+          final parsed = jsonDecode(modelImageRaw);
+          if (parsed is Map) {
+            // Prefer 'large' size for offline, fall back to 'medium' or 'thumb'
+            modelImageUrl = parsed['large'] ?? parsed['medium'] ?? parsed['thumb'];
+          }
+        } catch (_) {
+          // If parsing fails, assume it's a direct URL (legacy format)
+          modelImageUrl = modelImageRaw;
+        }
+      }
 
       if (modelImageUrl != null && modelImageUrl.isNotEmpty) {
         _progress = _progress.copyWith(

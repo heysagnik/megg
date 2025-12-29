@@ -782,41 +782,44 @@ class _ReelItemState extends State<_ReelItem>
               ),
             ),
 
-          // Action buttons (Right Side)
+          // Action buttons (Right Side - Centered vertically for one-handed use)
           Positioned(
             right: 16,
-            bottom: 100,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ActionButton(
-                  icon: widget.isLiked
-                      ? PhosphorIconsFill.heart
-                      : PhosphorIconsRegular.heart,
-                  label: _formatCount(widget.likeCount),
-                  onTap: widget.onLike,
-                  color: widget.isLiked
-                      ? const Color(0xFFFF3040)
-                      : Colors.white,
-                ),
-                const SizedBox(height: 20),
-                if (widget.reel.affiliateLink != null &&
-                    widget.reel.affiliateLink!.isNotEmpty) ...[
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   _ActionButton(
-                    icon: PhosphorIconsRegular.bag,
-                    label: 'Shop',
-                    onTap: widget.onShopTap,
+                    icon: widget.isLiked
+                        ? PhosphorIconsFill.heart
+                        : PhosphorIconsRegular.heart,
+                    label: _formatCount(widget.likeCount),
+                    onTap: widget.onLike,
+                    color: widget.isLiked
+                        ? const Color(0xFFFF3040)
+                        : Colors.white,
+                  ),
+                  const SizedBox(height: 24),
+                  if (widget.reel.affiliateLink != null &&
+                      widget.reel.affiliateLink!.isNotEmpty) ...[
+                    _ActionButton(
+                      icon: PhosphorIconsRegular.bag,
+                      label: 'Shop',
+                      onTap: widget.onShopTap,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  _ActionButton(
+                    icon: PhosphorIconsRegular.shareFat,
+                    label: 'Share',
+                    onTap: widget.onShareTap,
                     color: Colors.white,
                   ),
-                  const SizedBox(height: 20),
                 ],
-                _ActionButton(
-                  icon: PhosphorIconsRegular.shareFat,
-                  label: 'Share',
-                  onTap: widget.onShareTap,
-                  color: Colors.white,
-                ),
-              ],
+              ),
             ),
           ),
 

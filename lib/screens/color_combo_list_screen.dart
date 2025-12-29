@@ -35,6 +35,9 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
   }
 
   Future<void> _loadCombos() async {
+    debugPrint('[ComboList] ========== _loadCombos START ==========');
+    debugPrint('[ComboList] groupType: ${widget.groupType}');
+    
     try {
       setState(() {
         _isLoading = true;
@@ -43,16 +46,30 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
       });
 
       final hasOfflineContent = OfflineDownloadService().isOfflineModeEnabled;
+      debugPrint('[ComboList] isOfflineModeEnabled: $hasOfflineContent');
       
       if (hasOfflineContent) {
-        debugPrint('[ComboList] Using local-first: loading from offline cache');
+        debugPrint('[ComboList] Offline mode enabled. Attempting to load from local cache...');
         await _loadOfflineCombos();
-        return;
+        
+        // If we found offline combos, we are done.
+        if (_combos.isNotEmpty) {
+          debugPrint('[ComboList] Loaded ${_combos.length} combos from offline cache.');
+          return;
+        }
+        
+        debugPrint('[ComboList] No suitable offline content found. Falling back to network...');
+      } else {
+        debugPrint('[ComboList] Offline mode disabled. Proceeding with network fetch.');
       }
 
-      // No local content, try network
+      // No local content or fallback needed, try network
       final isOffline = ConnectivityService().isOffline;
+      debugPrint('[ComboList] ConnectivityService.isOffline: $isOffline');
+      
       if (isOffline) {
+        debugPrint('[ComboList] Device is offline. Cannot fetch from network.');
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
           _error = 'No internet connection and no offline content available';
@@ -60,8 +77,11 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
         return;
       }
 
+      debugPrint('[ComboList] Fetching from network via ColorComboService.getCombosByGroup("${widget.groupType}") with forceRefresh...');
+      
       try {
-        final combos = await _comboService.getCombosByGroup(widget.groupType);
+        final combos = await _comboService.getCombosByGroup(widget.groupType, forceRefresh: true);
+        debugPrint('[ComboList] Network fetch SUCCESS. Received ${combos.length} combos.');
 
         if (!mounted) return;
 
@@ -69,14 +89,17 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
           _combos = combos;
           _isLoading = false;
         });
+        debugPrint('[ComboList] State updated. _combos.length = ${_combos.length}');
       } catch (e) {
-        debugPrint('[ComboList] Network failed: $e');
+        debugPrint('[ComboList] Network fetch FAILED: $e');
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
           _error = 'Failed to load color combos';
         });
       }
     } catch (e) {
+      debugPrint('[ComboList] OUTER EXCEPTION: $e');
       if (!mounted) return;
 
       setState(() {
@@ -84,17 +107,14 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
         _error = e.toString().replaceAll('Exception: ', '');
       });
     }
+    debugPrint('[ComboList] ========== _loadCombos END ==========');
   }
 
   Future<void> _loadOfflineCombos() async {
     final offlineCombos = await OfflineDownloadService().getOfflineCombos();
     
     if (offlineCombos.isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _error = 'Color combos not available offline';
-      });
+      debugPrint('[ComboList] No offline combos found in metadata.');
       return;
     }
 
@@ -315,9 +335,9 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
     }
 
     // Use network image
-    if (combo.modelImage.isNotEmpty) {
+    if (combo.modelImageMedium.isNotEmpty) {
       return Image.network(
-        combo.modelImage,
+        combo.modelImageMedium,
         fit: BoxFit.cover,
         width: double.infinity,
         errorBuilder: (context, error, stackTrace) {

@@ -79,14 +79,14 @@ class RecommendedCombosSection extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.grey[100],
-                image: combo.modelImage.isNotEmpty
+                image: combo.modelImageMedium.isNotEmpty
                     ? DecorationImage(
-                        image: NetworkImage(combo.modelImage),
+                        image: NetworkImage(combo.modelImageMedium),
                         fit: BoxFit.cover,
                       )
                     : null,
               ),
-              child: combo.modelImage.isEmpty
+              child: combo.modelImageMedium.isEmpty
                   ? const Center(
                       child: Icon(Icons.image_not_supported, color: Colors.grey),
                     )

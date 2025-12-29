@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/ai_service.dart';
@@ -76,17 +77,74 @@ class _AICameraScreenState extends State<AICameraScreen> {
     );
   }
 
+  Future<File?> _cropImage(File imageFile) async {
+    try {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'CROP',
+            toolbarColor: Colors.black,
+            toolbarWidgetColor: Colors.white,
+            statusBarColor: Colors.black,
+            backgroundColor: Colors.black,
+            activeControlsWidgetColor: Colors.white,
+            cropFrameColor: Colors.white,
+            cropGridColor: Colors.white.withOpacity(0.2),
+            dimmedLayerColor: Colors.black.withOpacity(0.7),
+            cropFrameStrokeWidth: 1,
+            showCropGrid: false,
+            lockAspectRatio: false,
+            hideBottomControls: true,
+            initAspectRatio: CropAspectRatioPreset.original,
+          ),
+          IOSUiSettings(
+            title: 'CROP',
+            cancelButtonTitle: 'CANCEL',
+            doneButtonTitle: 'DONE',
+            resetButtonHidden: true,
+            rotateButtonsHidden: true,
+            aspectRatioPickerButtonHidden: true,
+            rotateClockwiseButtonHidden: true,
+          ),
+        ],
+      );
+      
+      if (croppedFile != null) {
+        return File(croppedFile.path);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Crop error: $e');
+      // If cropping fails, return original image
+      return imageFile;
+    }
+  }
+
   Future<void> _captureImage() async {
     if (_cameraController == null || _isProcessing) return;
 
-    setState(() => _isProcessing = true);
-
     try {
       final XFile image = await _cameraController!.takePicture();
-      await _analyzeImage(File(image.path));
+      
+      // Turn off flash after capture
+      if (_flashOn) {
+        await _cameraController!.setFlashMode(FlashMode.off);
+        setState(() => _flashOn = false);
+      }
+      
+      // Show crop dialog
+      final croppedFile = await _cropImage(File(image.path));
+      if (croppedFile == null) return; // User cancelled
+      
+      if (!mounted) return;
+      setState(() => _isProcessing = true);
+      await _analyzeImage(croppedFile);
     } catch (e) {
       debugPrint('Capture error: $e');
-      _showError('Failed to capture image');
+      if (mounted) {
+        _showError('Failed to capture image');
+      }
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
@@ -95,17 +153,27 @@ class _AICameraScreenState extends State<AICameraScreen> {
   }
 
   Future<void> _pickFromGallery() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    
-    if (image != null) {
-      setState(() => _isProcessing = true);
-      try {
-        await _analyzeImage(File(image.path));
-      } finally {
-        if (mounted) {
-          setState(() => _isProcessing = false);
-        }
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (image != null) {
+        // Show crop dialog
+        final croppedFile = await _cropImage(File(image.path));
+        if (croppedFile == null) return; // User cancelled
+        
+        if (!mounted) return;
+        setState(() => _isProcessing = true);
+        await _analyzeImage(croppedFile);
+      }
+    } catch (e) {
+      debugPrint('Gallery pick error: $e');
+      if (mounted) {
+        _showError('Failed to select image');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
       }
     }
   }
@@ -383,43 +451,82 @@ class _AICameraScreenState extends State<AICameraScreen> {
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Icon
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black,
-                                    borderRadius: BorderRadius.circular(28),
-                                  ),
-                                  child: const Icon(
-                                    PhosphorIconsRegular.tShirt,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
                                 // Title
-                                const Text(
-                                  'FIND YOUR PERFECT MATCH',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 2,
-                                    color: Colors.black,
+                                const Center(
+                                  child: Text(
+                                    'FIND YOUR PERFECT MATCH',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: 2,
+                                      color: Colors.black,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                // Description
+                                // Introduction
                                 Text(
-                                  'Got a shirt but unsure what to pair it with?\n\nSnap a photo of your clothing and we\'ll suggest perfectly matching pieces to complete your look.',
+                                  'Have a pink shirt but don\'t know which jeans color to wear with it? Just upload a photo in our MEGG Camera.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 14,
                                     height: 1.6,
                                     color: Colors.grey[700],
                                     letterSpacing: 0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                // What it does section
+                                const Text(
+                                  'What it does:',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                _buildBulletPoint('Upload a shirt → get best jeans / pants colors'),
+                                _buildBulletPoint('Upload jeans → get best shirt / upper colors'),
+                                _buildBulletPoint('See all matching color options'),
+                                _buildBulletPoint('Get product links that look damn good together'),
+                                const SizedBox(height: 16),
+                                // How to use
+                                Text(
+                                  'Use it anytime.\nUpload any clothing item.\nWe suggest the best color combination.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    height: 1.5,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                // Key benefit
+                                const Center(
+                                  child: Text(
+                                    'One photo → All matching colors → Buy links',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Center(
+                                  child: Text(
+                                    'No thinking. No confusion.\nJust perfect matching.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      height: 1.5,
+                                      color: Colors.grey[600],
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(height: 24),
@@ -453,6 +560,34 @@ class _AICameraScreenState extends State<AICameraScreen> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBulletPoint(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '•  ',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[700],
+            ),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
         ],
       ),
     );

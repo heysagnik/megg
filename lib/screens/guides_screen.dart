@@ -28,6 +28,7 @@ class _GuidesScreenState extends State<GuidesScreen> {
     {'name': 'Wedding', 'key': 'wedding_fit', 'image': 'assets/guides/festive.jpg'},
     {'name': 'Winter', 'key': 'winter_fit', 'image': 'assets/guides/winter.jpg'},
     {'name': 'Layering', 'key': 'layering_fit', 'image': 'assets/guides/layering fit.jpg'},
+    {'name': 'Travel', 'key': 'travel_fit', 'image': 'assets/guides/airport.png'},
   ];
 
   // Search keywords for each guide category
@@ -97,6 +98,11 @@ class _GuidesScreenState extends State<GuidesScreen> {
       'Wedding Aesthetic', 'Shaadi Fit', 'Shaadi Look', 'Festive Fit', 'Festive Look',
       'Celebration Fit', 'Reception Outfit', 'Engagement Outfit', 'Sangeet Look', 'Haldi Look',
       'Mehendi Fit', 'wedding', 'shaadi', 'festive',
+    ],
+    'travel_fit': [
+      'Travel Outfit', 'Travel Look', 'Airport Look', 'Airport Outfit', 'Vacation Fit',
+      'Vacation Outfit', 'Trip Outfit', 'Holiday Look', 'Journey Fit', 'Getaway Outfit',
+      'Travel Aesthetic', 'Airport Aesthetic', 'Wander Look', 'Explorer Fit', 'travel', 'airport', 'vacation',
     ],
   };
 

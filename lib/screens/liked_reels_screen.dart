@@ -653,30 +653,35 @@ class _ReelItemState extends State<_ReelItem>
               ),
             ),
 
+          // Action buttons (Right Side - Centered vertically for one-handed use)
           Positioned(
             right: 16,
-            bottom: 120,
-            child: Column(
-              children: [
-                _ActionButton(
-                  icon: widget.isLiked
-                      ? PhosphorIconsFill.heart
-                      : PhosphorIconsRegular.heart,
-                  label: widget.likeCount.toString(),
-                  onTap: widget.onLike,
-                  color: widget.isLiked ? Colors.red : Colors.white,
-                ),
-                if (widget.reel.affiliateLink != null &&
-                    widget.reel.affiliateLink!.isNotEmpty) ...[
-                  const SizedBox(height: 24),
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   _ActionButton(
-                    icon: PhosphorIconsRegular.shoppingBag,
-                    label: null,
-                    onTap: widget.onShopTap,
-                    color: Colors.white,
+                    icon: widget.isLiked
+                        ? PhosphorIconsFill.heart
+                        : PhosphorIconsRegular.heart,
+                    label: widget.likeCount.toString(),
+                    onTap: widget.onLike,
+                    color: widget.isLiked ? Colors.red : Colors.white,
                   ),
+                  if (widget.reel.affiliateLink != null &&
+                      widget.reel.affiliateLink!.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    _ActionButton(
+                      icon: PhosphorIconsRegular.shoppingBag,
+                      label: null,
+                      onTap: widget.onShopTap,
+                      color: Colors.white,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
 
