@@ -142,6 +142,9 @@ class _GuideSearchScreenState extends State<GuideSearchScreen> {
     });
     setState(() {
       _searchQuery = query.trim();
+
+      _searchResults = [];
+      _searchedCategory = null;
     });
   }
 

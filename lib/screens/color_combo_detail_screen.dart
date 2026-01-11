@@ -257,17 +257,17 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
 
   Widget _buildNetworkImage() {
     return LazyImage(
-      imageUrl: _combo!.modelImageLarge,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
-      errorWidget: Container(
-        color: Colors.grey[100],
-        child: Icon(
-          PhosphorIconsRegular.image,
-          size: 80,
-          color: Colors.grey[400],
-        ),
-      ),
+              imageUrl: _combo!.modelImageLarge,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorWidget: Container(
+                color: Colors.grey[100],
+                child: Icon(
+                  PhosphorIconsRegular.image,
+                  size: 80,
+                  color: Colors.grey[400],
+                ),
+              ),
     );
   }
 
@@ -318,7 +318,8 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
                 _buildColorSwatchWithLabel(_combo!.colorA!, 'PRIMARY'),
               if (_combo!.colorB != null && _combo!.colorB!.isNotEmpty)
                 _buildColorSwatchWithLabel(_combo!.colorB!, 'SECONDARY'),
-
+              if (_combo!.colorC != null && _combo!.colorC!.isNotEmpty)
+                _buildColorSwatchWithLabel(_combo!.colorC!, 'THIRD'),
              
               ..._combo!.comboColors.asMap().entries.map(
                 (entry) => _buildColorSwatchWithLabel(

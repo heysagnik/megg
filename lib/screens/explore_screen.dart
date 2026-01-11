@@ -440,12 +440,8 @@ class _ExploreScreenState extends State<ExploreScreen>
       {'name': 'Sweatshirt', 'image': 'assets/category/sweatshirt.jpg'},
       {'name': 'Tshirt', 'image': 'assets/category/tshirt.jpg'},
 
-      {'name': 'Accesories', 'image': 'assets/category/accessories.jpg'},
+      {'name': 'Accesories', 'image': 'assets/category/accessories.png'},
       {'name': 'Innerwear', 'image': 'assets/category/innerwear.jpg'},
-
-      {'name': 'Sports Wear', 'image': 'assets/category/sports.jpg'},
-      {'name': 'Office Wear', 'image': 'assets/category/formals.jpg'},
-
       {'name': 'Traditional', 'image': 'assets/category/traditional.jpg'},
       {
         'name': 'Daily Essentials',
@@ -566,19 +562,7 @@ class _ExploreScreenState extends State<ExploreScreen>
             ),
           ],
         ),
-        const SizedBox(height: 4),
-        // Row 7: 2 medium boxes
-        Row(
-          children: [
-            Expanded(
-              child: _buildCategoryBox(context, categories[14], height: 200),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: _buildCategoryBox(context, categories[15], height: 200),
-            ),
-          ],
-        ),
+        
         const SizedBox(height: 4),
         // Row 8: single box for the 17th category (index 16)
         if (categories.length > 16)

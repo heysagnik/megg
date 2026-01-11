@@ -46,11 +46,9 @@ class Product {
     String extractImageUrl(String imageString, {String preferredSize = 'medium'}) {
       final trimmed = imageString.trim();
       
-      // Check if it's a JSON string (starts with '{')
       if (trimmed.startsWith('{')) {
         try {
           final Map<String, dynamic> imageJson = jsonDecode(trimmed);
-          // Try preferred size first, then fallback in order
           final sizes = [preferredSize, 'medium', 'large', 'original', 'thumb'];
           for (final size in sizes) {
             if (imageJson.containsKey(size) && imageJson[size] != null && imageJson[size].toString().isNotEmpty) {
@@ -58,7 +56,7 @@ class Product {
             }
           }
         } catch (e) {
-          // If JSON parsing fails, return the original string
+         
           return trimmed;
         }
       }
@@ -86,12 +84,23 @@ class Product {
     List<String> parseFabric(dynamic value) {
       if (value == null) return [];
       if (value is List) {
-        return value.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+        return value
+            .map((e) => e.toString())
+            .where((s) => s.isNotEmpty && s != 'null')
+            .toList();
       }
-      if (value is String && value.isNotEmpty) {
+      if (value is String && value.isNotEmpty && value != 'null') {
         return [value];
       }
       return [];
+    }
+
+    // Helper to parse nullable strings, filtering out "null" string values
+    String? parseNullableString(dynamic value) {
+      if (value == null) return null;
+      final str = value.toString();
+      if (str.isEmpty || str == 'null') return null;
+      return str;
     }
 
     return Product(
@@ -101,10 +110,10 @@ class Product {
       brand: json['brand']?.toString() ?? 'Unknown Brand',
       images: parseImages(json['images']),
       category: json['category']?.toString() ?? 'Uncategorized',
-      subcategory: json['subcategory']?.toString(),
+      subcategory: parseNullableString(json['subcategory']),
       color: json['color']?.toString() ?? '',
-      description: json['description']?.toString(),
-      affiliateLink: json['affiliate_link']?.toString(),
+      description: parseNullableString(json['description']),
+      affiliateLink: parseNullableString(json['affiliate_link']),
       fabric: parseFabric(json['fabric']),
       clicks: (json['clicks'] as num?)?.toInt() ?? 0,
       popularity: (json['popularity'] as num?)?.toInt() ?? 0,

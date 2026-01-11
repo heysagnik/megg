@@ -36,111 +36,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   final SearchHistoryService _historyService = SearchHistoryService();
   final WishlistService _wishlistService = WishlistService();
 
-  static const Map<String, List<String>> _categorySubcategories = {
-    'Jacket': [
-      'Puffer Jacket',
-      'Leather Jacket',
-      'Varsity Jacket',
-      'Bomber Jacket',
-      'Biker Jacket',
-      'Denim Jacket',
-      'Windcheater',
-      'Suede Jacket',
-      'Half Jacket',
-      'Overcoat',
-    ],
-    'Hoodies': ['Regular Hoodie', 'Zip Hoodie', 'Printed Hoodie'],
-    'Sweater': [
-      'Round Neck Sweater',
-      'V-Neck Sweater',
-      'Turtleneck Sweater',
-      'Polo Neck Sweater',
-      'Sweater Vest',
-      'Cardigan',
-      'Zip Sweater',
-    ],
-    'Sweatshirt': [
-      'Oversized Sweatshirt',
-      'Printed Sweatshirt',
-      'Pullover Sweatshirt',
-      'Zip Sweatshirt',
-    ],
-    'Shirt': [
-      'Checked Shirt',
-      'Striped Shirt',
-      'Printed Shirt',
-      'Linen Shirt',
-      'Textured Shirt',
-      'Half-Sleeve Shirt',
-      'Solid Shirt',
-      'Shacket',
-    ],
-    'Jeans': [
-      'Wide-Leg Jeans',
-      'Straight Fit Jeans',
-      'Cargo Pants',
-      'Bootcut Jeans',
-      'Chinos',
-      'Linen Pants',
-    ],
-    'Trackpants': ['Baggy Trackpants', 'Cargo Trackpants'],
-    'Shoes': ['Sneakers', 'Clogs', 'Boots', 'Loafers', 'Canvas Shoes'],
-    'Tshirt': [
-      'Regular Fit T-Shirt',
-      'Oversized T-Shirt',
-      'Polo T-Shirt',
-      'Full-Sleeve T-Shirt',
-      'Gym T-Shirt',
-    ],
-    'Mens Accessories': [
-      'Bags',
-      'Caps',
-      'Watches',
-      'Belts',
-      'Sunglasses',
-      'Rings',
-      'Chains',
-    ],
-    'Sports Wear': [
-      'Shorts',
-      'Sports Jacket',
-      'Socks',
-      'Football Shoes',
-      'Badminton Shoes',
-      'Sports Shoes',
-    ],
-    'Office Wear': [
-      'Formal Shirts',
-      'Formal Pants',
-      'Formal Shoes',
-      'Suits',
-      'Tuxedo',
-      'Blazers',
-      'Ties & Pocket Squares',
-    ],
-    'Body Care': [
-      'Face Wash',
-      'Moisturiser',
-      'Sunscreen',
-      'Serum',
-      'Underarm Roll-On',
-      'Shampoo',
-      'Body Wash',
-      'Hair Oil',
-    ],
-    'Traditional': [
-      'Kurta',
-      'Pyjama',
-      'Short Kurta',
-      'Kurta Set',
-      'Indo-Western Outfit',
-      'Nehru Jacket',
-      'Ethnic Shoes',
-    ],
-    'Perfume': ['Luxurious', 'Budget-Friendly'],
-    'Innerwear': ['Trunks', 'Vests', 'Boxers', 'Thermal Wear'],
-  };
-
   List<Product> _searchResults = [];
   String _sortBy = 'Popularity';
   bool _isGridView = true;
@@ -295,6 +190,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
       if (!mounted || requestToken != _requestSerial) return;
 
+      final bool shouldUpdateFilters = !isLoadMore;
+      
       setState(() {
         final resolvedPage = response.page > 0 ? response.page : page;
         _currentPage = resolvedPage;
@@ -307,12 +204,14 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
         } else {
           _searchResults = List<Product>.from(response.products);
           _totalResults = response.totalResults ?? _searchResults.length;
-
-          _updateFiltersFromResponse(response);
         }
 
         _syncControllersWithResults();
       });
+      
+      if (shouldUpdateFilters) {
+        _updateFiltersFromResponse(response);
+      }
     } catch (e) {
       if (!mounted || requestToken != _requestSerial) return;
 
@@ -337,19 +236,14 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     }
   }
 
-  /// Update filters based on API response
-  /// The API returns appliedFilters showing what was detected/applied
-  void _updateFiltersFromResponse(SearchResultPage response) {
-    // Extract detected filters from API response
+  Future<void> _updateFiltersFromResponse(SearchResultPage response) async {
     final filters = response.appliedFilters;
 
     if (filters != null) {
       _detectedCategory = filters['appliedCategory'] as String?;
       _detectedColor = filters['appliedColor'] as String?;
       
-      // Only update detected subcategory if user hasn't explicitly selected one
-      // This prevents the filter bar from disappearing when browsing subcategories
-      final apiSubcategory = filters['appliedSubcategory'] as String?;
+    final apiSubcategory = filters['appliedSubcategory'] as String?;
       if (_selectedSubcategory == null && apiSubcategory != null) {
         _detectedSubcategory = apiSubcategory;
         _subcategoryFromQuery = true;  // Subcategory was in original query
@@ -358,19 +252,16 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
         _subcategoryFromQuery = false;
       }
 
-      // If user hasn't explicitly selected a category, use the detected one
-      if (_selectedCategory == null && _detectedCategory != null) {
-        _availableSubcategories =
-            _categorySubcategories[_detectedCategory] ?? [];
-      } else if (_selectedCategory != null) {
-        _availableSubcategories =
-            _categorySubcategories[_selectedCategory] ?? [];
+      // Fetch subcategories from API based on detected/selected category
+      final categoryToFetch = _selectedCategory ?? _detectedCategory;
+      if (categoryToFetch != null) {
+        await _fetchSubcategoriesForCategory(categoryToFetch);
       } else {
         _availableSubcategories = [];
       }
     } else {
       // Fallback: detect from results if no filters in response
-      _extractFiltersFromResults();
+      await _extractFiltersFromResults();
     }
 
     // Extract available colors from results
@@ -383,8 +274,18 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
     _availableColors = colors.toList()..sort();
   }
 
+  /// Fetch subcategories for a category from API
+  Future<void> _fetchSubcategoriesForCategory(String category) async {
+    final subcategories = await _searchService.getSubcategories(category);
+    if (mounted) {
+      setState(() {
+        _availableSubcategories = subcategories;
+      });
+    }
+  }
+
   /// Fallback method to extract filters from results when API doesn't provide them
-  void _extractFiltersFromResults() {
+  Future<void> _extractFiltersFromResults() async {
     if (_searchResults.isEmpty) {
       _availableSubcategories = [];
       _availableColors = [];
@@ -397,10 +298,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
         .where((c) => c.isNotEmpty)
         .toSet();
 
+    String? categoryToFetch;
     if (categories.length == 1) {
       final category = categories.first;
       _detectedCategory = category;
-      _availableSubcategories = _categorySubcategories[category] ?? [];
+      categoryToFetch = category;
     } else if (categories.isNotEmpty) {
       final categoryCount = <String, int>{};
       for (final product in _searchResults) {
@@ -413,8 +315,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
           .key;
 
       _detectedCategory = mostCommonCategory;
-      _availableSubcategories =
-          _categorySubcategories[mostCommonCategory] ?? [];
+      categoryToFetch = mostCommonCategory;
+    }
+
+    if (categoryToFetch != null) {
+      await _fetchSubcategoriesForCategory(categoryToFetch);
     } else {
       _availableSubcategories = [];
     }
@@ -544,13 +449,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
               onSubcategorySelected: (subcategory) {
                 setState(() {
                   _selectedSubcategory = subcategory;
-                  if (subcategory != null) {
-                    for (final entry in _categorySubcategories.entries) {
-                      if (entry.value.contains(subcategory)) {
-                        _selectedCategory = entry.key;
-                        break;
-                      }
-                    }
+                  if (subcategory != null && _detectedCategory != null) {
+                    _selectedCategory = _detectedCategory;
                   } else {
                     _selectedCategory = null;
                   }
@@ -622,7 +522,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
-    if (_currentQuery.isEmpty ||
+    final hasExplicitFilters = _selectedCategory != null || 
+        _selectedSubcategory != null || 
+        _selectedColor != null;
+    
+    if ((_currentQuery.isEmpty && !hasExplicitFilters) ||
         !_hasMore ||
         _isLoadingMore ||
         _isInitialLoading) {
@@ -1116,15 +1020,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
                               _selectedSubcategory = tempSubcategory;
                               _selectedColor = tempColor;
 
-                              // Auto-detect category from subcategory when applying filter
-                              if (tempSubcategory != null) {
-                                for (final entry
-                                    in _categorySubcategories.entries) {
-                                  if (entry.value.contains(tempSubcategory)) {
-                                    _selectedCategory = entry.key;
-                                    break;
-                                  }
-                                }
+                              // Use detected category when applying subcategory filter
+                              if (tempSubcategory != null && _detectedCategory != null) {
+                                _selectedCategory = _detectedCategory;
                               } else if (tempColor != null &&
                                   _detectedCategory != null) {
                                 // If only color is selected, keep the detected category

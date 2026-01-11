@@ -513,14 +513,35 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
   }
 
   Widget _buildComboImage(ColorCombo combo) {
-    // OFFLINE FEATURE DISABLED - always use network images
     if (combo.modelImageMedium.isNotEmpty) {
-      return SizedBox.expand(
-        child: LazyImage(
-          imageUrl: combo.modelImageMedium,
-          fit: BoxFit.cover,
-          alignment: Alignment.topCenter,
-        ),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          
+          final baseWidth = 180.0;
+          final cardWidth = constraints.maxWidth;
+          
+          final scale = 1.2;
+          
+          final cardHeight = constraints.maxHeight;
+          final offsetY = -(cardHeight * 0.08); // 8% of card height
+          
+          return SizedBox.expand(
+            child: ClipRect(
+              child: Transform.scale(
+                scale: scale,
+                alignment: Alignment.topCenter,
+                child: Transform.translate(
+                  offset: Offset(0, offsetY),
+                  child: LazyImage(
+                    imageUrl: combo.modelImageMedium,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       );
     }
 

@@ -28,6 +28,36 @@ class SearchService {
   SearchService._internal();
 
   final ApiClient _apiClient = ApiClient();
+  
+  final Map<String, List<String>> _subcategoryCache = {};
+
+  Future<List<String>> getSubcategories(String category) async {
+    if (category.isEmpty) return [];
+    
+    if (_subcategoryCache.containsKey(category)) {
+      return _subcategoryCache[category]!;
+    }
+    
+    try {
+      final encoded = Uri.encodeComponent(category);
+      final response = await _apiClient.get('/subcategories/$encoded');
+      
+      if (response['success'] == true && response['data'] is List) {
+        final subcategories = (response['data'] as List)
+            .where((item) => item['is_active'] == true)
+            .map((item) => item['name'] as String)
+            .toList();
+        
+        // Cache the result
+        _subcategoryCache[category] = subcategories;
+        return subcategories;
+      }
+      return [];
+    } catch (e) {
+      // Return empty list on error, don't throw
+      return [];
+    }
+  }
 
   Future<SearchResultPage> search({
     String? query,
@@ -118,12 +148,17 @@ class SearchService {
       final resolvedLimit = _parseInt(root['limit']) ?? _parseInt(response['limit']) ?? limit;
       final total = _parseInt(root['total']) ?? _parseInt(response['total']);
 
-      final hasMore = _inferHasMore(
-        metadata: metadata,
-        page: resolvedPage,
-        limit: resolvedLimit,
-        total: total,
-      );
+      bool hasMore;
+      if (total != null) {
+        hasMore = _inferHasMore(
+          metadata: metadata,
+          page: resolvedPage,
+          limit: resolvedLimit,
+          total: total,
+        );
+      } else {
+        hasMore = products.length >= resolvedLimit;
+      }
 
       return SearchResultPage(
         products: products,
@@ -307,7 +342,8 @@ class SearchService {
               metadata['current_page'] ??
               metadata['pageNumber'] ??
               metadata['currentPage'] ??
-              response['page'],
+              response['page'] ??
+              (rootData is Map<String, dynamic> ? rootData['page'] : null),
         ) ??
         1;
 
@@ -317,7 +353,8 @@ class SearchService {
               metadata['per_page'] ??
               metadata['page_size'] ??
               metadata['pageSize'] ??
-              response['limit'],
+              response['limit'] ??
+              (rootData is Map<String, dynamic> ? rootData['limit'] : null),
         ) ??
         ApiConfig.defaultPageSize;
 
@@ -328,7 +365,8 @@ class SearchService {
           metadata['count'] ??
           metadata['total_items'] ??
           metadata['totalItems'] ??
-          response['total'],
+          response['total'] ??
+          (rootData is Map<String, dynamic> ? rootData['total'] : null),
     );
 
     final hasMore = _inferHasMore(

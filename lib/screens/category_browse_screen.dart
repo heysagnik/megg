@@ -26,112 +26,6 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
   final SearchService _searchService = SearchService();
   final WishlistService _wishlistService = WishlistService();
 
-  // Category to subcategories mapping
-  static const Map<String, List<String>> _categorySubcategories = {
-    'Jacket': [
-      'Puffer Jacket',
-      'Leather Jacket',
-      'Varsity Jacket',
-      'Bomber Jacket',
-      'Biker Jacket',
-      'Denim Jacket',
-      'Windcheater',
-      'Suede Jacket',
-      'Half Jacket',
-      'Overcoat',
-    ],
-    'Hoodies': ['Regular Hoodie', 'Zip Hoodie', 'Printed Hoodie'],
-    'Sweater': [
-      'Round Neck Sweater',
-      'V-Neck Sweater',
-      'Turtleneck Sweater',
-      'Polo Neck Sweater',
-      'Sweater Vest',
-      'Cardigan',
-      'Zip Sweater',
-    ],
-    'Sweatshirt': [
-      'Oversized Sweatshirt',
-      'Printed Sweatshirt',
-      'Pullover Sweatshirt',
-      'Zip Sweatshirt',
-    ],
-    'Shirt': [
-      'Checked Shirt',
-      'Striped Shirt',
-      'Printed Shirt',
-      'Linen Shirt',
-      'Textured Shirt',
-      'Half-Sleeve Shirt',
-      'Solid Shirt',
-      'Shacket',
-    ],
-    'Jeans': [
-      'Wide-Leg Jeans',
-      'Straight Fit Jeans',
-      'Cargo Pants',
-      'Bootcut Jeans',
-      'Chinos',
-      'Linen Pants',
-    ],
-    'Trackpants': ['Baggy Trackpants', 'Cargo Trackpants'],
-    'Shoes': ['Sneakers', 'Clogs', 'Boots', 'Loafers', 'Canvas Shoes'],
-    'Tshirt': [
-      'Regular Fit T-Shirt',
-      'Oversized T-Shirt',
-      'Polo T-Shirt',
-      'Full-Sleeve T-Shirt',
-      'Gym T-Shirt',
-    ],
-    'Mens Accessories': [
-      'Bags',
-      'Caps',
-      'Watches',
-      'Belts',
-      'Sunglasses',
-      'Rings',
-      'Chains',
-    ],
-    'Sports Wear': [
-      'Shorts',
-      'Sports Jacket',
-      'Socks',
-      'Football Shoes',
-      'Badminton Shoes',
-      'Sports Shoes',
-    ],
-    'Office Wear': [
-      'Formal Shirts',
-      'Formal Pants',
-      'Formal Shoes',
-      'Suits',
-      'Tuxedo',
-      'Blazers',
-      'Ties & Pocket Squares',
-    ],
-    'Body Care': [
-      'Face Wash',
-      'Moisturiser',
-      'Sunscreen',
-      'Serum',
-      'Underarm Roll-On',
-      'Shampoo',
-      'Body Wash',
-      'Hair Oil',
-    ],
-    'Traditional': [
-      'Kurta',
-      'Pyjama',
-      'Short Kurta',
-      'Kurta Set',
-      'Indo-Western Outfit',
-      'Nehru Jacket',
-      'Ethnic Shoes',
-    ],
-    'Perfume': ['Luxurious', 'Budget-Friendly'],
-    'Innerwear': ['Trunks', 'Vests', 'Boxers', 'Thermal Wear'],
-  };
-
   List<Product> _products = [];
   List<Map<String, dynamic>> _banners = [];
 
@@ -158,11 +52,20 @@ class _CategoryBrowseScreenState extends State<CategoryBrowseScreen>
   @override
   void initState() {
     super.initState();
-    // Initialize subcategories based on category
-    _availableSubcategories = _categorySubcategories[widget.category] ?? [];
+    _fetchSubcategories();
     _fetch(page: 1);
     _loadWishlist();
   }
+
+  Future<void> _fetchSubcategories() async {
+    final subcategories = await _searchService.getSubcategories(widget.category);
+    if (mounted) {
+      setState(() {
+        _availableSubcategories = subcategories;
+      });
+    }
+  }
+
 
   @override
   void dispose() {

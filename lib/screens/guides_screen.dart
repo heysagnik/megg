@@ -8,7 +8,7 @@ import 'guide_search_screen.dart';
 class GuidesScreen extends StatelessWidget {
   const GuidesScreen({super.key});
 
-  // Updated guide categories with new titles
+
   static final List<Map<String, dynamic>> _allGuideCategories = [
     {'name': 'Office', 'key': 'office_fit', 'image': 'assets/guides/formal.jpg'},
     {'name': 'Date', 'key': 'date_fit', 'image': 'assets/guides/date.jpg'},
@@ -16,12 +16,12 @@ class GuidesScreen extends StatelessWidget {
     {'name': 'Party', 'key': 'party_fit', 'image': 'assets/guides/party fit.jpg'},
     {'name': 'Color-combo', 'key': 'color_combo', 'image': 'assets/guides/color combo.jpg'},
     {'name': 'Personality development', 'key': 'personality_development', 'image': 'assets/guides/personality dev.jpg'},
-    {'name': 'Old money', 'key': 'old_money', 'image': 'assets/guides/formal.jpg'},
-    {'name': 'Streetwear', 'key': 'street_wear', 'image': 'assets/guides/college.jpg'},
+    {'name': 'Old money', 'key': 'old_money', 'image': 'assets/guides/oldmoney.png'},
+    {'name': 'Streetwear', 'key': 'street_wear', 'image': 'assets/guides/streetwear.png'},
     {'name': 'Wedding', 'key': 'wedding_fit', 'image': 'assets/guides/festive.jpg'},
     {'name': 'Winter', 'key': 'winter_fit', 'image': 'assets/guides/winter.jpg'},
     {'name': 'Layering', 'key': 'layering_fit', 'image': 'assets/guides/layering fit.jpg'},
-    {'name': 'Travel', 'key': 'travel_fit', 'image': 'assets/guides/airport.png'},
+    {'name': 'Travel', 'key': 'travel_fit', 'image': 'assets/guides/travel.png'},
   ];
 
   @override

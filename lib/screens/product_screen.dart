@@ -35,10 +35,13 @@ class _ProductScreenState extends State<ProductScreen> {
 
   // Color variants
   List<Product> _colorVariants = [];
+  
+  late Product _currentProduct;
 
   @override
   void initState() {
     super.initState();
+    _currentProduct = widget.product; 
     _pageController = PageController();
     _checkWishlistStatus();
     _loadProductData();
@@ -149,19 +152,24 @@ class _ProductScreenState extends State<ProductScreen> {
       debugPrint('[ProductScreen] Variants type: ${result['variants'].runtimeType}');
       
       if (mounted) {
+        final fetchedProduct = result['product'] as Product?;
         final recommendations = result['recommended'] as List<Product>? ?? [];
         final variants = result['variants'] as List<Product>? ?? [];
         
         debugPrint('[ProductScreen] Recommendations count: ${recommendations.length}');
         debugPrint('[ProductScreen] Variants count: ${variants.length}');
+        debugPrint('[ProductScreen] Fetched product description: ${fetchedProduct?.description}');
+        debugPrint('[ProductScreen] Fetched product fabric: ${fetchedProduct?.fabric}');
         
         setState(() {
+          if (fetchedProduct != null) {
+            _currentProduct = fetchedProduct;
+          }
           _productRecommendations = recommendations;
           _colorVariants = variants;
           _isLoadingData = false;
         });
         
-        // Initialize page controllers for recommendations
         for (final p in recommendations) {
           _recommendationPageControllers.putIfAbsent(
             p.id,
@@ -373,6 +381,15 @@ class _ProductScreenState extends State<ProductScreen> {
               fontSize: 18,
               fontWeight: FontWeight.w500,
               letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Prices may vary',
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey[500],
+              letterSpacing: 0.3,
             ),
           ),
         ],
@@ -594,6 +611,7 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _buildProductDetails() {
+    debugPrint('[ProductScreen] Building details - fabric: ${_currentProduct.fabric}, desc: ${_currentProduct.description?.substring(0, (_currentProduct.description?.length ?? 0).clamp(0, 30))}');
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
       decoration: BoxDecoration(color: Colors.grey[50]),
@@ -610,17 +628,17 @@ class _ProductScreenState extends State<ProductScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          _buildDetailRow('Category', widget.product.category),
-          if (widget.product.subcategory != null &&
-              widget.product.subcategory!.isNotEmpty) ...[
+          _buildDetailRow('Category', _currentProduct.category),
+          if (_currentProduct.subcategory != null &&
+              _currentProduct.subcategory!.isNotEmpty) ...[
             const SizedBox(height: 12),
-            _buildDetailRow('Subcategory', widget.product.subcategory!),
+            _buildDetailRow('Subcategory', _currentProduct.subcategory!),
           ],
           const SizedBox(height: 12),
-          _buildDetailRow('Color', widget.product.color),
-          if (widget.product.fabric.isNotEmpty) ...[
+          _buildDetailRow('Color', _currentProduct.color),
+          if (_currentProduct.fabric.isNotEmpty) ...[
             const SizedBox(height: 12),
-            _buildDetailRow('Fabric', widget.product.fabric.join(', ')),
+            _buildDetailRow('Fabric', _currentProduct.fabric.join(', ')),
           ],
         ],
       ),
@@ -658,7 +676,7 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _buildDescription() {
-    final description = widget.product.description;
+    final description = _currentProduct.description;
     if (description == null || description.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -776,7 +794,7 @@ class _ProductScreenState extends State<ProductScreen> {
           height: 54,
           child: ElevatedButton(
             onPressed: () async {
-              final affiliateLink = widget.product.affiliateLink;
+              final affiliateLink = _currentProduct.affiliateLink;
               if (affiliateLink == null || affiliateLink.isEmpty) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
