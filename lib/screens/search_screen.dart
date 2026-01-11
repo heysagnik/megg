@@ -93,6 +93,7 @@ class _SearchScreenState extends State<SearchScreen>
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _animationController.dispose();
     _controller.dispose();
     _focus.dispose();

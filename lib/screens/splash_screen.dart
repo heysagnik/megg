@@ -10,7 +10,7 @@ import '../services/notification_service.dart';
 import '../services/startup_service.dart';
 import '../services/wishlist_service.dart';
 import '../services/connectivity_service.dart';
-import '../services/offline_download_service.dart';
+// import '../services/offline_download_service.dart'; // OFFLINE FEATURE DISABLED
 import '../services/reel_service.dart';
 import '../services/deep_link_service.dart';
 import 'welcome_screen.dart';
@@ -74,7 +74,7 @@ class _SplashScreenState extends State<SplashScreen>
         // Local-only services first (always work)
         await CacheService().init();
         await ConnectivityService().init();
-        await OfflineDownloadService().init();
+        // await OfflineDownloadService().init(); // OFFLINE FEATURE DISABLED
         
         // Firebase with timeout - don't block on network issues
         try {

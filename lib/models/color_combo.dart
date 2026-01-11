@@ -10,6 +10,7 @@ class ColorCombo {
   // New API fields
   final String? colorA;
   final String? colorB;
+  final String? colorC;
   final String groupType;
   final String modelImage;
   final List<String> productIds;
@@ -22,6 +23,7 @@ class ColorCombo {
     required this.comboColors,
     this.colorA,
     this.colorB,
+    this.colorC,
     required this.groupType,
     required this.modelImage,
     required this.productIds,
@@ -81,6 +83,7 @@ class ColorCombo {
 
     final newColorA = json['color_a'] as String?;
     final newColorB = json['color_b'] as String?;
+    final newColorC = json['color_c'] as String?;
 
     return ColorCombo(
       id: json['id'] as String,
@@ -90,6 +93,7 @@ class ColorCombo {
       comboColors: legacyComboColors,
       colorA: newColorA,
       colorB: newColorB,
+      colorC: newColorC,
       groupType: json['group_type'] as String? ?? 'casual',
       modelImage: _parseModelImage(json['model_image']),
       productIds:
@@ -113,6 +117,7 @@ class ColorCombo {
       // Include new fields when available
       if (colorA != null) 'color_a': colorA,
       if (colorB != null) 'color_b': colorB,
+      if (colorC != null) 'color_c': colorC,
       'group_type': groupType,
       'model_image': modelImage,
       'product_ids': productIds,

@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../config/api_config.dart';
+import 'api_client.dart';
 
 /// Download status enum
 enum DownloadStatus {
@@ -84,7 +84,9 @@ class OfflineDownloadService extends ChangeNotifier {
   static const String _kFirstSignInPromptShownKey = 'offline_first_prompt_shown';
   static const int _kReelsPageSize = 10;
 
-  final Dio _dio = Dio(BaseOptions(
+  final ApiClient _apiClient = ApiClient();
+  // Separate Dio for file downloads (needs longer timeouts)
+  final Dio _downloadDio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 30),
     receiveTimeout: const Duration(minutes: 5),
   ));
@@ -218,8 +220,8 @@ class OfflineDownloadService extends ChangeNotifier {
     notifyListeners();
 
     // Fetch color combos JSON
-    final response = await _dio.get(
-      '${ApiConfig.vercelUrl}/api/color-combos',
+    final response = await _apiClient.dio.get(
+      '${_apiClient.vercelBaseUrl}/color-combos',
       cancelToken: _cancelToken,
     );
 
@@ -267,7 +269,7 @@ class OfflineDownloadService extends ChangeNotifier {
           final extension = modelImageUrl.contains('.webp') ? 'webp' : 'jpg';
           final imagePath = '${combosDir.path}/${id}_model.$extension';
 
-          await _dio.download(
+          await _downloadDio.download(
             modelImageUrl,
             imagePath,
             cancelToken: _cancelToken,
@@ -280,7 +282,6 @@ class OfflineDownloadService extends ChangeNotifier {
             },
           );
         } catch (e) {
-          debugPrint('[Offline] Failed to download combo image: $e');
           // Continue with next image
         }
       }
@@ -288,8 +289,6 @@ class OfflineDownloadService extends ChangeNotifier {
       _progress = _progress.copyWith(colorCombosDownloaded: i + 1);
       notifyListeners();
     }
-
-    debugPrint('[Offline] Color combos download complete');
   }
 
   /// Download all reels (paginated)
@@ -301,8 +300,8 @@ class OfflineDownloadService extends ChangeNotifier {
     List<dynamic> allReels = [];
 
     // First, get total count
-    final firstResponse = await _dio.get(
-      '${ApiConfig.vercelUrl}/api/reels',
+    final firstResponse = await _apiClient.dio.get(
+      '${_apiClient.vercelBaseUrl}/reels',
       queryParameters: {'limit': _kReelsPageSize, 'page': 1},
       cancelToken: _cancelToken,
     );
@@ -324,8 +323,8 @@ class OfflineDownloadService extends ChangeNotifier {
     for (int page = 2; page <= totalPages; page++) {
       if (_cancelToken?.isCancelled ?? false) return;
 
-      final response = await _dio.get(
-        '${ApiConfig.vercelUrl}/api/reels',
+      final response = await _apiClient.dio.get(
+        '${_apiClient.vercelBaseUrl}/reels',
         queryParameters: {'limit': _kReelsPageSize, 'page': page},
         cancelToken: _cancelToken,
       );
@@ -357,7 +356,7 @@ class OfflineDownloadService extends ChangeNotifier {
         try {
           final videoPath = '${reelsDir.path}/${id}_video.mp4';
           
-          await _dio.download(
+          await _downloadDio.download(
             videoUrl,
             videoPath,
             cancelToken: _cancelToken,
@@ -372,7 +371,6 @@ class OfflineDownloadService extends ChangeNotifier {
             },
           );
         } catch (e) {
-          debugPrint('[Offline] Failed to download reel video: $e');
           // Continue with next reel
         }
       }
@@ -381,21 +379,19 @@ class OfflineDownloadService extends ChangeNotifier {
       if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
         try {
           final thumbPath = '${reelsDir.path}/${id}_thumb.jpg';
-          await _dio.download(
+          await _downloadDio.download(
             thumbnailUrl,
             thumbPath,
             cancelToken: _cancelToken,
           );
         } catch (e) {
-          debugPrint('[Offline] Failed to download reel thumbnail: $e');
+          // Continue with next thumbnail
         }
       }
 
       _progress = _progress.copyWith(reelsDownloaded: i + 1);
       notifyListeners();
     }
-
-    debugPrint('[Offline] Reels download complete');
   }
 
   /// Cancel ongoing download

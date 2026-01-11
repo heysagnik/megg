@@ -7,6 +7,8 @@ import '../models/product.dart';
 import '../models/color_combo.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../widgets/product_widget.dart';
+import '../widgets/lazy_image.dart';
+import '../widgets/skeleton_loaders.dart';
 import '../services/trending_service.dart';
 import '../services/product_service.dart';
 import '../services/outfit_service.dart';
@@ -18,8 +20,6 @@ import 'product_screen.dart';
 import 'search_results_screen.dart';
 import 'color_combo_list_screen.dart';
 import 'outfit_products_screen.dart';
-import '../widgets/loader.dart';
-import '../widgets/custom_refresh_indicator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingTrending = true;
   bool _isLoadingNew = true;
   bool _isLoadingOutfits = true;
-  bool _isScreenLoading = true;
 
   String? _trendingError;
   String? _newArrivalsError;
@@ -84,13 +83,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadHomeData({bool forceRefresh = false}) async {
-    if (!forceRefresh &&
-        _dailyOutfits.isEmpty &&
-        _trendingProducts.isEmpty &&
-        _newArrivals.isEmpty) {
-      if (mounted) setState(() => _isScreenLoading = true);
-    }
-
     await Future.wait([
       _loadDailyOutfits(forceRefresh: forceRefresh),
       _loadTrendingProducts(forceRefresh: forceRefresh),
@@ -98,10 +90,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _loadWishlist(),
       _loadRecentlyViewed(),
     ]);
-
-    if (mounted) {
-      setState(() => _isScreenLoading = false);
-    }
 
     _prefetchColorCombos();
   }
@@ -449,80 +437,113 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _isScreenLoading
-          ? const Center(child: Loader(showCaption: true))
-          : CustomRefreshIndicator(
-              onRefresh: () => _loadHomeData(forceRefresh: true),
-              child: CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  if (_shouldShowDailyOutfits()) ...[
-                    SliverToBoxAdapter(
-                      child: _buildDailyOutfitSection(
-                        context,
-                        height: outfitHeight,
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
-                  SliverToBoxAdapter(child: _buildCategorySection(context)),
-                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  if (_shouldShowRecentlyViewed()) ...[
-                    SliverToBoxAdapter(
-                      child: _buildRecentlyViewedSection(context),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
-                  if (_shouldShowTrending()) ...[
-                    SliverToBoxAdapter(child: _buildFeaturedProducts(context)),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
-                  if (_shouldShowNewArrivals()) ...[
-                    SliverToBoxAdapter(child: _buildNewArrivalsHeader(context)),
-                    const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      sliver: SliverGrid(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: gridCrossAxisCount,
-                          childAspectRatio: 0.65,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 16,
-                        ),
-                        delegate: SliverChildBuilderDelegate((context, index) {
-                          final product = _newArrivals[index];
-                          return ProductCard(
-                            product: product,
-                            isListView: false,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      ProductScreen(product: product),
-                                ),
-                              ).then((_) => _loadRecentlyViewed());
-                            },
-                            isWishlisted: _homeWishlist.contains(product.id),
-                            pageController:
-                                _newArrivalsPageControllers[product.id],
-                            onWishlistToggle: _handleWishlistToggle,
-                          );
-                        }, childCount: _newArrivals.length),
-                      ),
-                    ),
-                    if (_isLoadingMore)
-                      const SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Center(child: Loader(size: 20)),
-                        ),
-                      ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                  ],
-                ],
+      body: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          SliverToBoxAdapter(
+            child: _isLoadingOutfits && _dailyOutfits.isEmpty
+                ? OutfitCarouselSkeleton(height: outfitHeight)
+                : _shouldShowDailyOutfits()
+                    ? _buildDailyOutfitSection(context, height: outfitHeight)
+                    : const SizedBox.shrink(),
+          ),
+          if (_shouldShowDailyOutfits() || (_isLoadingOutfits && _dailyOutfits.isEmpty))
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
+          
+          SliverToBoxAdapter(child: _buildCategorySection(context)),
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+          
+          // Recently Viewed Section
+          if (_shouldShowRecentlyViewed()) ...[
+            SliverToBoxAdapter(
+              child: _buildRecentlyViewedSection(context),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
+          ],
+          
+          // Trending Products Section with skeleton
+          SliverToBoxAdapter(
+            child: _isLoadingTrending && _trendingProducts.isEmpty
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      SectionHeaderSkeleton(),
+                      SizedBox(height: 16),
+                      ProductScrollSkeleton(),
+                    ],
+                  )
+                : _shouldShowTrending()
+                    ? _buildFeaturedProducts(context)
+                    : const SizedBox.shrink(),
+          ),
+          if (_shouldShowTrending() || (_isLoadingTrending && _trendingProducts.isEmpty))
+            const SliverToBoxAdapter(child: SizedBox(height: 32)),
+          
+          // New Arrivals Section with skeleton
+          if (_isLoadingNew && _newArrivals.isEmpty) ...[
+            const SliverToBoxAdapter(child: SectionHeaderSkeleton()),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              sliver: SliverToBoxAdapter(
+                child: ProductGridSkeleton(
+                  crossAxisCount: gridCrossAxisCount,
+                  itemCount: 4,
+                ),
               ),
             ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ] else if (_shouldShowNewArrivals()) ...[
+            SliverToBoxAdapter(child: _buildNewArrivalsHeader(context)),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: gridCrossAxisCount,
+                  childAspectRatio: 0.65,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 16,
+                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final product = _newArrivals[index];
+                  return ProductCard(
+                    product: product,
+                    isListView: false,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              ProductScreen(product: product),
+                        ),
+                      ).then((_) => _loadRecentlyViewed());
+                    },
+                    isWishlisted: _homeWishlist.contains(product.id),
+                    pageController:
+                        _newArrivalsPageControllers[product.id],
+                    onWishlistToggle: _handleWishlistToggle,
+                  );
+                }, childCount: _newArrivals.length),
+              ),
+            ),
+            if (_isLoadingMore)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                    ),
+                  ),
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
+        ],
+      ),
     );
   }
 
@@ -583,12 +604,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       fit: StackFit.expand,
                       children: [
                         if (imageUrl.isNotEmpty)
-                          Image.network(
-                            imageUrl,
+                          LazyImage(
+                            imageUrl: imageUrl,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(color: Colors.grey[100]);
-                            },
+                            alignment: Alignment.topCenter,
                           )
                         else
                           Container(color: Colors.grey[100]),
@@ -1021,6 +1040,4 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
-  // _buildProductCard removed (trending uses ProductCard from product_widget.dart)
 }

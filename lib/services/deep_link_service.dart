@@ -6,7 +6,7 @@ import '../screens/category_reels_screen.dart';
 /// Service for handling deep links to the app
 /// Supports:
 /// - Custom scheme: megg://guides/{category}/{reelId}
-/// - HTTPS links: https://megg.app/guides/{category}/{reelId}
+/// - HTTPS links: https://link.meggfashion.in/guides/{category}/{reelId}
 class DeepLinkService {
   static final DeepLinkService _instance = DeepLinkService._internal();
   factory DeepLinkService() => _instance;

@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dio/dio.dart';
-import '../config/api_config.dart';
+import 'api_client.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -12,12 +11,8 @@ class NotificationService {
 
   static const String _kNotificationPrefKey = 'notifications_enabled';
   static const String _kPermissionAskedKey = 'notification_permission_asked';
-  static const Duration _kNetworkTimeout = Duration(seconds: 15);
 
-  final Dio _dio = Dio(BaseOptions(
-    connectTimeout: _kNetworkTimeout,
-    receiveTimeout: _kNetworkTimeout,
-  ));
+  final ApiClient _apiClient = ApiClient();
 
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   bool _notificationsEnabled = true;
@@ -26,9 +21,8 @@ class NotificationService {
 
   Future<List<Map<String, dynamic>>> fetchNotifications() async {
     try {
-      final response = await _dio.get(
-        '${ApiConfig.vercelUrl}/api/notifications',
-        options: Options(headers: {'Accept': 'application/json'}),
+      final response = await _apiClient.dio.get(
+        '${_apiClient.vercelBaseUrl}/notifications',
       );
 
       if (response.data is List) {
@@ -38,7 +32,6 @@ class NotificationService {
       }
       return [];
     } catch (e) {
-      debugPrint('[NotificationService] Failed to fetch: $e');
       return [];
     }
   }

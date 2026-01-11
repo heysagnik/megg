@@ -8,6 +8,7 @@ import '../services/product_service.dart';
 import '../services/wishlist_service.dart';
 import '../services/cache_service.dart';
 import '../widgets/aesthetic_app_bar.dart';
+import '../widgets/lazy_image.dart';
 import '../services/auth_service.dart';
 import '../widgets/login_required_dialog.dart';
 import '../widgets/product_widget.dart';
@@ -29,20 +30,18 @@ class _ProductScreenState extends State<ProductScreen> {
   final WishlistService _wishlistService = WishlistService();
 
   List<Product> _productRecommendations = [];
-  bool _isLoadingProductRecommendations = false;
+  bool _isLoadingData = false;
   final Map<String, PageController> _recommendationPageControllers = {};
 
   // Color variants
   List<Product> _colorVariants = [];
-  bool _isLoadingVariants = false;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
     _checkWishlistStatus();
-    _loadProductRecommendations();
-    _loadColorVariants();
+    _loadProductData();
     _saveToRecentlyViewed();
     _startAutoSlide();
   }
@@ -70,11 +69,9 @@ class _ProductScreenState extends State<ProductScreen> {
 
   Future<void> _saveToRecentlyViewed() async {
     try {
-      debugPrint('[Product] Saving ${widget.product.id} to recently viewed');
       await CacheService().addRecentlyViewedProduct(widget.product.toJson());
-      debugPrint('[Product] Saved successfully');
     } catch (e) {
-      debugPrint('[Product] Error saving to recently viewed: $e');
+      // Silent fail
     }
   }
 
@@ -140,43 +137,42 @@ class _ProductScreenState extends State<ProductScreen> {
     }
   }
 
-  Future<void> _loadProductRecommendations() async {
-    setState(() => _isLoadingProductRecommendations = true);
+  /// Load product data (recommendations and variants) from unified API
+  Future<void> _loadProductData() async {
+    setState(() => _isLoadingData = true);
     try {
-      final products = await ProductService().getProductRecommendations(
-        widget.product.id,
-      );
+      debugPrint('[ProductScreen] Loading data for product: ${widget.product.id}');
+      final result = await ProductService().getProductDetails(widget.product.id);
+      
+      debugPrint('[ProductScreen] API result keys: ${result.keys}');
+      debugPrint('[ProductScreen] Recommended type: ${result['recommended'].runtimeType}');
+      debugPrint('[ProductScreen] Variants type: ${result['variants'].runtimeType}');
+      
       if (mounted) {
+        final recommendations = result['recommended'] as List<Product>? ?? [];
+        final variants = result['variants'] as List<Product>? ?? [];
+        
+        debugPrint('[ProductScreen] Recommendations count: ${recommendations.length}');
+        debugPrint('[ProductScreen] Variants count: ${variants.length}');
+        
         setState(() {
-          _productRecommendations = products;
-          _isLoadingProductRecommendations = false;
+          _productRecommendations = recommendations;
+          _colorVariants = variants;
+          _isLoadingData = false;
         });
-        for (final p in products) {
+        
+        // Initialize page controllers for recommendations
+        for (final p in recommendations) {
           _recommendationPageControllers.putIfAbsent(
             p.id,
             () => PageController(),
           );
         }
       }
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingProductRecommendations = false);
-    }
-  }
-
-  Future<void> _loadColorVariants() async {
-    setState(() => _isLoadingVariants = true);
-    try {
-      final variants = await ProductService().getProductVariants(
-        widget.product.id,
-      );
-      if (mounted) {
-        setState(() {
-          _colorVariants = variants;
-          _isLoadingVariants = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingVariants = false);
+    } catch (e, stackTrace) {
+      debugPrint('[ProductScreen] Error loading data: $e');
+      debugPrint('[ProductScreen] Stack trace: $stackTrace');
+      if (mounted) setState(() => _isLoadingData = false);
     }
   }
 
@@ -281,23 +277,10 @@ class _ProductScreenState extends State<ProductScreen> {
               itemBuilder: (context, index) {
                 return Container(
                   color: const Color(0xFFF8F8F8),
-                  child: Image.network(
-                    widget.product.images[index],
+                  child: LazyImage(
+                    imageUrl: widget.product.images[index],
                     fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                              : null,
-                          strokeWidth: 1.2,
-                          color: Colors.black,
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) => Center(
+                    errorWidget: Center(
                       child: Icon(
                         PhosphorIconsRegular.image,
                         size: 64,
@@ -398,7 +381,7 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _buildColorDisplay() {
-    if (widget.product.color.isEmpty && _colorVariants.isEmpty) {
+    if (_colorVariants.isEmpty && !_isLoadingData) {
       return const SizedBox.shrink();
     }
 
@@ -408,57 +391,24 @@ class _ProductScreenState extends State<ProductScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(height: 1, color: Colors.black.withOpacity(0.08)),
-          const SizedBox(height: 20),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'COLOR',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1.5,
-                  color: Colors.grey[600],
+          const SizedBox(height: 24),
+          if (_colorVariants.isNotEmpty)
+            _buildColorVariants()
+          else if (_isLoadingData)
+            SizedBox(
+              height: 48,
+              child: Center(
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: Colors.grey[400],
+                  ),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.product.color,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    if (_colorVariants.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      _buildColorVariants(),
-                    ] else if (_isLoadingVariants) ...[
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 48,
-                        child: Center(
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
+            ),
+          const SizedBox(height: 24),
           Container(height: 1, color: Colors.black.withOpacity(0.08)),
         ],
       ),
@@ -466,33 +416,59 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _buildColorVariants() {
-    // Count of other colors available
-    final otherColorsCount = _colorVariants.length ;
+    final List<Product> allColors = [
+      widget.product,
+      ..._colorVariants.where((v) => v.id != widget.product.id),
+    ];
+    
+    final totalColorsCount = allColors.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Show available colors count
-        if (otherColorsCount > 0)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              '$otherColorsCount more ${otherColorsCount == 1 ? 'color' : 'colors'} available',
+        // Header with color count
+        Row(
+          children: [
+            Text(
+              'COLOR',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 1.5,
                 color: Colors.grey[600],
-                letterSpacing: 0.3,
               ),
             ),
-          ),
+            if (totalColorsCount > 1) ...[
+              const SizedBox(width: 12),
+              Text(
+                '·',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[400],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '$totalColorsCount colors',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[500],
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 16),
+        // Color variant thumbnails
         SizedBox(
-          height: 80,
+          height: 115,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: _colorVariants.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemCount: allColors.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
-              final variant = _colorVariants[index];
+              final variant = allColors[index];
               final isSelected = variant.id == widget.product.id;
               final thumbnailUrl = variant.images.isNotEmpty
                   ? variant.images.first
@@ -501,102 +477,85 @@ class _ProductScreenState extends State<ProductScreen> {
               return GestureDetector(
                 onTap: isSelected
                     ? null
-                    : () {
-                        Navigator.pushReplacement(
-                          context,
-                          PageRouteBuilder(
-                            pageBuilder: (_, __, ___) =>
-                                ProductScreen(product: variant),
-                            transitionDuration: const Duration(
-                              milliseconds: 200,
+                    : () async {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
                             ),
-                            transitionsBuilder: (_, animation, __, child) {
-                              return FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              );
-                            },
                           ),
                         );
+                        
+                        try {
+                          final result = await ProductService().getProductDetails(variant.id);
+                          final fullProduct = result['product'] as Product?;
+                          
+                          if (!mounted) return;
+                          Navigator.pop(context);
+                          
+                          if (fullProduct != null) {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (_, __, ___) =>
+                                    ProductScreen(product: fullProduct),
+                                transitionDuration: const Duration(
+                                  milliseconds: 200,
+                                ),
+                                transitionsBuilder: (_, animation, __, child) {
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  );
+                                },
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (!mounted) return;
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Failed to load product'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                 child: SizedBox(
-                  width: 56,
+                  width: 72,
                   child: Column(
                     children: [
-                      // Thumbnail
+                      // Thumbnail - larger size
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        width: 48,
-                        height: 56,
+                        width: 72,
+                        height: 90,
                         decoration: BoxDecoration(
                           border: Border.all(
                             color: isSelected
                                 ? Colors.black
-                                : Colors.black.withOpacity(0.1),
+                                : Colors.grey.withOpacity(0.2),
                             width: isSelected ? 2 : 1,
                           ),
                         ),
-                        child: Stack(
-                          children: [
-                            // Thumbnail image
-                            if (thumbnailUrl != null)
-                              Positioned.fill(
-                                child: Image.network(
-                                  thumbnailUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    color: Colors.grey[100],
-                                    child: Center(
-                                      child: Text(
-                                        variant.color.isNotEmpty
-                                            ? variant.color[0].toUpperCase()
-                                            : '?',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                        child: thumbnailUrl != null
+                            ? LazyImage(
+                                imageUrl: thumbnailUrl,
+                                fit: BoxFit.cover,
+                                errorWidget: _buildColorFallback(variant.color),
                               )
-                            else
-                              Container(
-                                color: Colors.grey[100],
-                                child: Center(
-                                  child: Text(
-                                    variant.color.isNotEmpty
-                                        ? variant.color[0].toUpperCase()
-                                        : '?',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            // Selected indicator overlay
-                            if (isSelected)
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                child: Container(
-                                  height: 3,
-                                  color: Colors.black,
-                                ),
-                              ),
-                          ],
-                        ),
+                            : _buildColorFallback(variant.color),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       // Color name label
                       Text(
                         variant.color,
                         style: TextStyle(
-                          fontSize: 9,
+                          fontSize: 11,
                           fontWeight: isSelected
                               ? FontWeight.w600
                               : FontWeight.w400,
@@ -615,6 +574,22 @@ class _ProductScreenState extends State<ProductScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildColorFallback(String color) {
+    return Container(
+      color: Colors.grey[100],
+      child: Center(
+        child: Text(
+          color.isNotEmpty ? color[0].toUpperCase() : '?',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[500],
+          ),
+        ),
+      ),
     );
   }
 
@@ -643,6 +618,10 @@ class _ProductScreenState extends State<ProductScreen> {
           ],
           const SizedBox(height: 12),
           _buildDetailRow('Color', widget.product.color),
+          if (widget.product.fabric.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildDetailRow('Fabric', widget.product.fabric.join(', ')),
+          ],
         ],
       ),
     );
@@ -714,7 +693,7 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _buildProductRecommendations() {
-    if (_isLoadingProductRecommendations) {
+    if (_isLoadingData) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(20.0),

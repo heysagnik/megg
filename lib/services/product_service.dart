@@ -93,40 +93,72 @@ class ProductService {
     if (!forceRefresh) {
       final cachedData = await _cacheService.getCache(cacheKey);
       if (cachedData != null) {
-        final product = Product.fromJson(cachedData['product']);
-        final recommended = (cachedData['recommended'] as List)
-            .map((json) => Product.fromJson(json as Map<String, dynamic>))
-            .toList();
-        return {'product': product, 'recommended': recommended};
+        debugPrint('[ProductService] Using cached data for $productId');
+        try {
+          final productData = Map<String, dynamic>.from(cachedData['product'] as Map);
+          final product = Product.fromJson(productData);
+          final recommended = (cachedData['recommended'] as List? ?? [])
+              .map((json) => Product.fromJson(Map<String, dynamic>.from(json as Map)))
+              .toList();
+          final variants = (cachedData['variants'] as List? ?? [])
+              .map((json) => Product.fromJson(Map<String, dynamic>.from(json as Map)))
+              .toList();
+          return {'product': product, 'recommended': recommended, 'variants': variants};
+        } catch (e) {
+          debugPrint('[ProductService] Cache parse error, fetching fresh: $e');
+        }
       }
     }
 
     try {
+      debugPrint('[ProductService] Fetching from API for $productId');
       final response = await _apiClient.get('/products/$productId');
+      debugPrint('[ProductService] Raw response type: ${response.runtimeType}');
+      
       final data = response['data'] ?? response;
+      debugPrint('[ProductService] Data keys: ${data is Map ? data.keys.toList() : 'not a map'}');
 
       final productJson = data['product'] ?? data;
       final recommendedSource = data['recommended'] ?? data['related'];
+      final variantsSource = data['variants'];
+      
+      debugPrint('[ProductService] recommendedSource type: ${recommendedSource.runtimeType}, is list: ${recommendedSource is List}');
+      debugPrint('[ProductService] variantsSource type: ${variantsSource.runtimeType}, is list: ${variantsSource is List}');
 
       final product = Product.fromJson(productJson);
       final recommended = (recommendedSource is List)
           ? recommendedSource.map((json) => Product.fromJson(json)).toList()
           : <Product>[];
+      final variants = (variantsSource is List)
+          ? variantsSource.map((json) => Product.fromJson(json)).toList()
+          : <Product>[];
+      
+      debugPrint('[ProductService] Parsed recommended: ${recommended.length}, variants: ${variants.length}');
 
       await _cacheService.setCache(cacheKey, {
         'product': product.toJson(),
         'recommended': recommended.map((p) => p.toJson()).toList(),
+        'variants': variants.map((p) => p.toJson()).toList(),
       }, expiry: _kDetailsCacheExpiry);
 
-      return {'product': product, 'recommended': recommended};
+      return {'product': product, 'recommended': recommended, 'variants': variants};
     } catch (e) {
+      debugPrint('[ProductService] Error: $e');
       final cachedData = await _cacheService.getCache(cacheKey);
       if (cachedData != null) {
-        final product = Product.fromJson(cachedData['product']);
-        final recommended = (cachedData['recommended'] as List)
-            .map((json) => Product.fromJson(json as Map<String, dynamic>))
-            .toList();
-        return {'product': product, 'recommended': recommended};
+        try {
+          final productData = Map<String, dynamic>.from(cachedData['product'] as Map);
+          final product = Product.fromJson(productData);
+          final recommended = (cachedData['recommended'] as List? ?? [])
+              .map((json) => Product.fromJson(Map<String, dynamic>.from(json as Map)))
+              .toList();
+          final variants = (cachedData['variants'] as List? ?? [])
+              .map((json) => Product.fromJson(Map<String, dynamic>.from(json as Map)))
+              .toList();
+          return {'product': product, 'recommended': recommended, 'variants': variants};
+        } catch (_) {
+          // Cache parsing failed, rethrow original error
+        }
       }
       throw Exception('Failed to fetch product details: ${e.toString()}');
     }

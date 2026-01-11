@@ -737,7 +737,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          userName.toUpperCase(),
+          userName,
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w300,

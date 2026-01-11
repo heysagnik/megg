@@ -13,9 +13,9 @@ import '../models/reel.dart';
 import '../services/wishlist_service.dart';
 import '../services/reel_service.dart';
 import '../services/auth_service.dart';
-import '../services/offline_download_service.dart';
-import '../widgets/offline_mode_dialog.dart';
-import '../widgets/download_progress_sheet.dart';
+// import '../services/offline_download_service.dart'; // OFFLINE FEATURE DISABLED
+// import '../widgets/offline_mode_dialog.dart'; // OFFLINE FEATURE DISABLED
+// import '../widgets/download_progress_sheet.dart'; // OFFLINE FEATURE DISABLED
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -37,40 +37,15 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   void initState() {
     super.initState();
-    // Prefetch profile data in background so profile screen loads faster
     _prefetchProfileData();
-    // Check if we should show offline mode prompt
-    _checkOfflinePrompt();
+    // _checkOfflinePrompt(); // OFFLINE FEATURE DISABLED
   }
 
-  /// Check and show offline mode prompt for first-time sign-in
+  /* OFFLINE FEATURE DISABLED
   Future<void> _checkOfflinePrompt() async {
-    if (!AuthService().isAuthenticated) return;
-
-    final offlineService = OfflineDownloadService();
-    await offlineService.init();
-
-    // Only show if first time and not already downloaded
-    final shouldShow = await offlineService.shouldShowFirstSignInPrompt();
-    if (!shouldShow) return;
-    if (offlineService.isOfflineModeEnabled) return;
-
-    // Wait for the navigation to settle
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-
-    // Show the dialog
-    final enable = await OfflineModeDialog.show(context);
-
-    // Mark as shown regardless of choice
-    await offlineService.markFirstSignInPromptShown();
-
-    if (enable == true && mounted) {
-      // Start download and show progress
-      offlineService.startDownload();
-      await DownloadProgressSheet.showModal(context);
-    }
+    ...
   }
+  */
 
   /// Prefetch wishlist and liked reels data in background
   void _prefetchProfileData() {

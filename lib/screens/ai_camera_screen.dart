@@ -496,7 +496,7 @@ class _AICameraScreenState extends State<AICameraScreen> {
                                 const SizedBox(height: 16),
                                 // How to use
                                 Text(
-                                  'Use it anytime.\nUpload any clothing item.\nWe suggest the best color combination.',
+                                  'Use it anytime.Upload any clothing item.We suggest the best color combination.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 13,

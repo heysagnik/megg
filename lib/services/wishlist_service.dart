@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/product.dart';
-import '../config/api_config.dart';
+import 'api_client.dart';
 import 'cache_service.dart';
 import 'auth_service.dart';
 
@@ -13,46 +12,25 @@ class WishlistService extends ChangeNotifier {
   WishlistService._internal();
 
   static const String _kCacheKey = 'wishlist';
-  static const String _kTokenKey = 'session_token';
   static const Duration _kCacheExpiry = Duration(minutes: 5);
 
+  final ApiClient _apiClient = ApiClient();
   final CacheService _cacheService = CacheService();
   final AuthService _authService = AuthService();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-  
-  late final Dio _dio = Dio(BaseOptions(
-    baseUrl: '${ApiConfig.vercelUrl}/api',
-    connectTimeout: const Duration(seconds: 15),
-    receiveTimeout: const Duration(seconds: 15),
-    headers: {'Content-Type': 'application/json'},
-  ));
 
-  // In-memory cache
   List<Product> _productsCache = [];
   Set<String> _wishlistIdsCache = {};
   DateTime? _lastFetch;
   bool _isInitialized = false;
 
-  /// Unmodifiable list of wishlist products for UI binding
   List<Product> get products => List.unmodifiable(_productsCache);
-  
-  /// Unmodifiable set of wishlist product IDs for quick lookups
   Set<String> get productIds => Set.unmodifiable(_wishlistIdsCache);
-  
-  /// Number of items in wishlist
   int get count => _productsCache.length;
 
-  Future<Options> _authOptions() async {
-    final token = await _secureStorage.read(key: _kTokenKey);
-    return Options(headers: {'Authorization': 'Bearer $token'});
-  }
-
-  /// Initialize the service by loading from cache
   Future<void> init() async {
     if (_isInitialized) return;
     _isInitialized = true;
     
-    // Load from disk cache first for instant UI
     final cachedData = await _cacheService.getListCache(_kCacheKey);
     if (cachedData != null && cachedData.isNotEmpty) {
       _productsCache = cachedData.map((json) => Product.fromJson(json)).toList();
@@ -60,22 +38,16 @@ class WishlistService extends ChangeNotifier {
       notifyListeners();
     }
     
-    // Then sync with server in background
     _syncWithServer();
   }
 
-  /// Get wishlist products. Returns cached data immediately, fetches in background if stale.
   Future<List<Product>> getWishlist({bool forceRefresh = false}) async {
-    // Return cache immediately if valid
     if (!forceRefresh && _productsCache.isNotEmpty) {
       final isValid = _lastFetch != null && 
           DateTime.now().difference(_lastFetch!) < _kCacheExpiry;
-      if (isValid) {
-        return products;
-      }
+      if (isValid) return products;
     }
     
-    // If no local data, try disk cache
     if (_productsCache.isEmpty) {
       final cachedData = await _cacheService.getListCache(_kCacheKey);
       if (cachedData != null && cachedData.isNotEmpty) {
@@ -85,7 +57,6 @@ class WishlistService extends ChangeNotifier {
       }
     }
     
-    // Fetch from server
     if (forceRefresh || _productsCache.isEmpty) {
       await _syncWithServer();
     }
@@ -93,12 +64,15 @@ class WishlistService extends ChangeNotifier {
     return products;
   }
 
-  /// Sync wishlist with server (background operation)
   Future<void> _syncWithServer() async {
     if (!_authService.isAuthenticated) return;
     
     try {
-      final response = await _dio.get('/wishlist', options: await _authOptions());
+      final token = await _authService.getStoredToken();
+      final response = await _apiClient.dio.get(
+        '${_apiClient.vercelBaseUrl}/wishlist',
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
       
       dynamic dataWrapper;
       if (response.data is Map) {
@@ -119,29 +93,21 @@ class WishlistService extends ChangeNotifier {
             .map((json) => Product.fromJson(json as Map<String, dynamic>))
             .toList();
 
-        // Update cache
         _productsCache = serverProducts;
         _wishlistIdsCache = serverProducts.map((p) => p.id).toSet();
         _lastFetch = DateTime.now();
         
-        // Persist to disk
         await _persistToCache();
-        
         notifyListeners();
       }
     } catch (e) {
       debugPrint('[Wishlist] Sync error: $e');
-      // Keep local cache on error
     }
   }
 
-  /// Get wishlist IDs (fast lookup)
   Future<Set<String>> getWishlistIds({bool forceRefresh = false}) async {
-    if (!forceRefresh && _wishlistIdsCache.isNotEmpty) {
-      return productIds;
-    }
+    if (!forceRefresh && _wishlistIdsCache.isNotEmpty) return productIds;
     
-    // Load from disk if empty
     if (_wishlistIdsCache.isEmpty) {
       final cachedIds = await _cacheService.getWishlistIds();
       if (cachedIds.isNotEmpty) {
@@ -152,44 +118,34 @@ class WishlistService extends ChangeNotifier {
     return productIds;
   }
 
-  /// Check if product is in wishlist (instant, no async)
-  bool isInWishlistSync(String productId) {
-    return _wishlistIdsCache.contains(productId);
-  }
+  bool isInWishlistSync(String productId) => _wishlistIdsCache.contains(productId);
 
-  /// Check if product is in wishlist (async for compatibility)
   Future<bool> isInWishlist(String productId) async {
-    if (_wishlistIdsCache.isNotEmpty) {
-      return _wishlistIdsCache.contains(productId);
-    }
+    if (_wishlistIdsCache.isNotEmpty) return _wishlistIdsCache.contains(productId);
     final ids = await getWishlistIds();
     return ids.contains(productId);
   }
 
-  /// Add product to wishlist with optimistic update
-  /// 
-  /// [productId] - Required product ID
-  /// [product] - Optional full product object for optimistic UI update
   Future<void> addToWishlist(String productId, {Product? product}) async {
-    // Optimistic update
     _wishlistIdsCache.add(productId);
     if (product != null && !_productsCache.any((p) => p.id == productId)) {
-      _productsCache.insert(0, product); // Add to beginning
+      _productsCache.insert(0, product);
     }
     notifyListeners();
     
-    // Persist to disk immediately
     await _cacheService.addToWishlistCache(productId);
     await _persistToCache();
     
-    // Sync with server in background
     if (_authService.isAuthenticated) {
       try {
-        await _dio.post('/wishlist', data: {'productId': productId}, options: await _authOptions());
-        debugPrint('[Wishlist] Added $productId to server');
+        final token = await _authService.getStoredToken();
+        await _apiClient.dio.post(
+          '${_apiClient.vercelBaseUrl}/wishlist',
+          data: {'productId': productId},
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
       } catch (e) {
         debugPrint('[Wishlist] Add error: $e');
-        // Revert on error
         _wishlistIdsCache.remove(productId);
         _productsCache.removeWhere((p) => p.id == productId);
         await _cacheService.removeFromWishlistCache(productId);
@@ -200,26 +156,24 @@ class WishlistService extends ChangeNotifier {
     }
   }
 
-  /// Remove product from wishlist with optimistic update
   Future<void> removeFromWishlist(String productId) async {
-    // Optimistic update
     final removedProduct = _productsCache.where((p) => p.id == productId).firstOrNull;
     _wishlistIdsCache.remove(productId);
     _productsCache.removeWhere((p) => p.id == productId);
     notifyListeners();
     
-    // Persist to disk immediately
     await _cacheService.removeFromWishlistCache(productId);
     await _persistToCache();
     
-    // Sync with server in background
     if (_authService.isAuthenticated) {
       try {
-        await _dio.delete('/wishlist/$productId', options: await _authOptions());
-        debugPrint('[Wishlist] Removed $productId from server');
+        final token = await _authService.getStoredToken();
+        await _apiClient.dio.delete(
+          '${_apiClient.vercelBaseUrl}/wishlist/$productId',
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
       } catch (e) {
         debugPrint('[Wishlist] Remove error: $e');
-        // Revert on error
         _wishlistIdsCache.add(productId);
         if (removedProduct != null) {
           _productsCache.add(removedProduct);
@@ -232,7 +186,6 @@ class WishlistService extends ChangeNotifier {
     }
   }
 
-  /// Toggle wishlist status
   Future<void> toggleWishlist(String productId, {Product? product}) async {
     if (_wishlistIdsCache.contains(productId)) {
       await removeFromWishlist(productId);
@@ -241,14 +194,12 @@ class WishlistService extends ChangeNotifier {
     }
   }
 
-  /// Persist current state to disk cache
   Future<void> _persistToCache() async {
     final jsonList = _productsCache.map((p) => p.toJson()).toList();
     await _cacheService.setListCache(_kCacheKey, jsonList, expiry: _kCacheExpiry);
     await _cacheService.setWishlistIds(_wishlistIdsCache);
   }
 
-  /// Clear all wishlist cache
   Future<void> clearCache() async {
     _productsCache = [];
     _wishlistIdsCache = {};

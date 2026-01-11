@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/api_config.dart';
@@ -34,8 +36,21 @@ class ApiClient {
       baseUrl: ApiConfig.baseUrl,
       connectTimeout: ApiConfig.connectionTimeout,
       receiveTimeout: ApiConfig.requestTimeout,
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+      },
     ));
+
+    _dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.idleTimeout = const Duration(seconds: 30);
+        return client;
+      },
+    );
 
     _dio.interceptors.add(DioCacheInterceptor(options: _cacheOptions));
 
@@ -74,9 +89,7 @@ class ApiClient {
 
   Dio get dio => _dio;
 
-  String _normalizeUrl(String endpoint) {
-    return endpoint.startsWith('http') ? endpoint : endpoint;
-  }
+  String get vercelBaseUrl => '${ApiConfig.vercelUrl}/api';
 
   Future<dynamic> _retryRequest(
     Future<dynamic> Function() request, {
@@ -128,7 +141,7 @@ class ApiClient {
         options.extra = {'requiresAuth': requiresAuth};
 
         final response = await _dio.get(
-          _normalizeUrl(endpoint),
+          endpoint,
           queryParameters: queryParams,
           options: options,
         );
@@ -150,7 +163,7 @@ class ApiClient {
 
     try {
       final response = await _dio.post(
-        _normalizeUrl(endpoint),
+        endpoint,
         data: body,
         options: Options(extra: {'requiresAuth': requiresAuth}),
       );
@@ -169,7 +182,7 @@ class ApiClient {
 
     try {
       final response = await _dio.put(
-        _normalizeUrl(endpoint),
+        endpoint,
         data: body,
         options: Options(extra: {'requiresAuth': requiresAuth}),
       );
@@ -187,7 +200,7 @@ class ApiClient {
 
     try {
       final response = await _dio.delete(
-        _normalizeUrl(endpoint),
+        endpoint,
         options: Options(extra: {'requiresAuth': requiresAuth}),
       );
       return response.data;

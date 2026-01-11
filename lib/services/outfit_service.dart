@@ -127,20 +127,6 @@ class OutfitService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getColorCombos() async {
-    try {
-      final response = await _apiClient.get('/color-combos');
-
-      if (response['combos'] != null) {
-        return (response['combos'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-      }
-
-      return [];
-    } catch (e) {
-      throw Exception('Failed to fetch color combos: ${e.toString()}');
-    }
-  }
-
   Future<List<Map<String, dynamic>>> getOutfitsByCombo(String comboId) async {
     try {
       final response = await _apiClient.get('/color-combos/$comboId/outfits');

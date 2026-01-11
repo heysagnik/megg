@@ -1,14 +1,16 @@
-import 'dart:io';
+// import 'dart:io'; // OFFLINE FEATURE DISABLED
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/color_combo.dart';
 import '../models/product.dart';
 import '../services/color_combo_service.dart';
-import '../services/connectivity_service.dart';
-import '../services/offline_download_service.dart';
+// import '../services/connectivity_service.dart'; // OFFLINE FEATURE DISABLED
+// import '../services/offline_download_service.dart'; // OFFLINE FEATURE DISABLED
 import '../widgets/aesthetic_app_bar.dart';
-import '../widgets/offline_banner.dart';
+import '../widgets/lazy_image.dart';
 import '../widgets/loader.dart';
+import '../widgets/custom_refresh_indicator.dart';
 import '../widgets/product_widget.dart';
 import '../widgets/recommended_combos_section.dart';
 import 'product_screen.dart';
@@ -30,7 +32,7 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
   List<ColorCombo> _recommendedCombos = [];
   bool _isLoading = true;
   bool _isLoadingRecommendations = true;
-  bool _isOfflineMode = false;
+  // bool _isOfflineMode = false; // OFFLINE FEATURE DISABLED
   String? _error;
 
   final Map<String, PageController> _pageControllers = {};
@@ -41,51 +43,41 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
     _loadComboData();
   }
 
-  Future<void> _loadComboData() async {
+  Future<void> _loadComboData({bool forceRefresh = false}) async {
     try {
       setState(() {
         _isLoading = true;
         _error = null;
-        _isOfflineMode = false;
       });
 
-      // Check connectivity
-      final isOffline = ConnectivityService().isOffline;
-      
-      if (isOffline) {
-        // Try offline data first
-        await _loadOfflineComboData();
-        return;
+      // Clear Flutter's image cache on force refresh
+      if (forceRefresh) {
+        PaintingBinding.instance.imageCache.clear();
+        PaintingBinding.instance.imageCache.clearLiveImages();
       }
 
-      // Try network
-      try {
-        final data = await _comboService.getColorComboWithProducts(
-          widget.comboId,
-        );
+      // OFFLINE FEATURE DISABLED - Always use network
+      final data = await _comboService.getColorComboWithProducts(
+        widget.comboId,
+        forceRefresh: forceRefresh,
+      );
 
-        if (!mounted) return;
-
-        setState(() {
-          _combo = data['combo'] as ColorCombo;
-          _products = data['products'] as List<Product>;
-          _isLoading = false;
-        });
-
-        // Initialize page controllers for product images
-        for (final product in _products) {
-          _pageControllers.putIfAbsent(product.id, () => PageController());
-        }
-
-        _loadRecommendations();
-      } catch (e) {
-        // Network failed, try offline fallback
-        debugPrint('[ColorCombo] Network failed, trying offline: $e');
-        await _loadOfflineComboData();
-      }
-    } catch (e) {
       if (!mounted) return;
 
+      setState(() {
+        _combo = data['combo'] as ColorCombo;
+        _products = data['products'] as List<Product>;
+        _isLoading = false;
+      });
+
+      // Initialize page controllers for product images
+      for (final product in _products) {
+        _pageControllers.putIfAbsent(product.id, () => PageController());
+      }
+
+      _loadRecommendations();
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error = e.toString().replaceAll('Exception: ', '');
@@ -93,34 +85,11 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
     }
   }
 
+  /* OFFLINE FEATURE DISABLED
   Future<void> _loadOfflineComboData() async {
-    final offlineCombo = await OfflineDownloadService().getOfflineComboById(widget.comboId);
-    
-    if (offlineCombo == null || offlineCombo.isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _error = 'This content is not available offline';
-      });
-      return;
-    }
-
-    if (!mounted) return;
-    
-    // Use local image path if available
-    final localImagePath = offlineCombo['local_image_path'] as String?;
-    if (localImagePath != null) {
-      offlineCombo['model_image_url'] = localImagePath;
-    }
-
-    setState(() {
-      _combo = ColorCombo.fromJson(offlineCombo);
-      _products = []; // No products in offline mode
-      _isLoading = false;
-      _isOfflineMode = true;
-      _isLoadingRecommendations = false; // Skip recommendations
-    });
+    ...
   }
+  */
 
   Future<void> _loadRecommendations() async {
     if (_combo == null) return;
@@ -236,32 +205,17 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
             );
           }
 
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Offline indicator
-                if (_isOfflineMode)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    color: Colors.grey[100],
-                    child: const Text(
-                      'VIEWING OFFLINE • PRODUCTS UNAVAILABLE',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1.5,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-                _buildModelImage(),
-                const SizedBox(height: 24),
-                _buildColorPalette(),
-                // Only show products if not offline
-                if (!_isOfflineMode) ...[
+          return CustomRefreshIndicator(
+            onRefresh: () => _loadComboData(forceRefresh: true),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildModelImage(),
+                  const SizedBox(height: 24),
+                  _buildColorPalette(),
+                  // OFFLINE FEATURE DISABLED - always show products
                   const SizedBox(height: 32),
                   _buildProductsSection(),
                   const SizedBox(height: 32),
@@ -269,9 +223,9 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
                     recommendations: _recommendedCombos,
                     isLoading: _isLoadingRecommendations,
                   ),
+                  const SizedBox(height: 24),
                 ],
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
           );
         },
@@ -293,47 +247,27 @@ class _ColorComboDetailScreenState extends State<ColorComboDetailScreen> {
       );
     }
 
+    // OFFLINE FEATURE DISABLED - always use network image
     return SizedBox(
       width: double.infinity,
       height: 450,
-      child: FutureBuilder<String?>(
-        future: OfflineDownloadService().getLocalComboImagePath(_combo!.id),
-        builder: (context, snapshot) {
-          final localPath = snapshot.data;
-          
-          // If local file exists, use it
-          if (localPath != null && File(localPath).existsSync()) {
-            return Image.file(
-              File(localPath),
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                // Fallback to network on local file error
-                return _buildNetworkImage();
-              },
-            );
-          }
-          
-          // Otherwise use network image
-          return _buildNetworkImage();
-        },
-      ),
+      child: _buildNetworkImage(),
     );
   }
 
   Widget _buildNetworkImage() {
-    return Image.network(
-      _combo!.modelImageLarge,
+    return LazyImage(
+      imageUrl: _combo!.modelImageLarge,
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          color: Colors.grey[100],
-          child: Icon(
-            PhosphorIconsRegular.image,
-            size: 80,
-            color: Colors.grey[400],
-          ),
-        );
-      },
+      alignment: Alignment.topCenter,
+      errorWidget: Container(
+        color: Colors.grey[100],
+        child: Icon(
+          PhosphorIconsRegular.image,
+          size: 80,
+          color: Colors.grey[400],
+        ),
+      ),
     );
   }
 

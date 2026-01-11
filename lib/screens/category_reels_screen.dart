@@ -4,13 +4,15 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import '../models/reel.dart';
 import '../models/product.dart';
 import '../services/reel_service.dart';
 import '../services/auth_service.dart';
 import '../services/product_service.dart';
 import '../services/connectivity_service.dart';
-import '../services/offline_download_service.dart';
+// import '../services/offline_download_service.dart'; // OFFLINE FEATURE DISABLED
 import '../widgets/loader.dart';
 import '../widgets/product_widget.dart';
 import 'product_screen.dart';
@@ -45,12 +47,18 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
   int _currentPageIndex = 0;
   bool _isMutedDueToCall = false;
   final Map<int, GlobalKey<_ReelItemState>> _reelKeys = {};
+  
+  // Scroll hint for first-time users
+  Timer? _scrollHintTimer;
+  bool _hasUserScrolled = false;
+  static const String _scrollHintShownKey = 'reels_scroll_hint_shown';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadReels();
+    _startScrollHintTimer();
   }
 
   @override
@@ -62,7 +70,65 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
+    _scrollHintTimer?.cancel();
     super.dispose();
+  }
+
+  /// Start timer to show scroll hint after 10 seconds
+  void _startScrollHintTimer() {
+    _scrollHintTimer = Timer(const Duration(seconds: 10), () async {
+      if (!mounted || _hasUserScrolled) return;
+      
+      // Check if hint was already shown
+      final prefs = await SharedPreferences.getInstance();
+      final wasShown = prefs.getBool(_scrollHintShownKey) ?? false;
+      
+      if (wasShown) return;
+      
+     
+      if (_pageController.hasClients && _reels.length > 1) {
+        _startScrollHintLoop();
+      }
+    });
+  }
+
+  void _startScrollHintLoop() async {
+    while (mounted && !_hasUserScrolled && _pageController.hasClients) {
+      await _performScrollHintAnimation();
+      
+      if (!mounted || _hasUserScrolled) break;
+      
+      await Future.delayed(const Duration(milliseconds: 800));
+    }
+    
+    if (_hasUserScrolled) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_scrollHintShownKey, true);
+    }
+  }
+
+  /// Animate a subtle scroll down and back to hint at swipe interaction
+  Future<void> _performScrollHintAnimation() async {
+    if (!_pageController.hasClients || !mounted || _hasUserScrolled) return;
+    
+    final currentPosition = _pageController.position.pixels;
+    final hintDistance = 100.0; // Scroll 100 pixels down
+    
+    // Scroll down smoothly
+    await _pageController.animateTo(
+      currentPosition + hintDistance,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+    );
+    
+    if (!mounted || _hasUserScrolled) return;
+    
+    // Scroll back smoothly
+    await _pageController.animateTo(
+      currentPosition,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInCubic,
+    );
   }
 
   Future<void> _loadReels() async {
@@ -72,60 +138,8 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
         _errorMessage = null;
       });
 
-      List<Reel> reels = [];
-      
-      // Check connectivity status first
-      await ConnectivityService().checkRealConnectivity();
-      final isOffline = ConnectivityService().isOffline;
-      final hasOfflineData = OfflineDownloadService().isOfflineModeEnabled;
-      
-      debugPrint('[CategoryReels] isOffline: $isOffline, hasOfflineData: $hasOfflineData');
-      
-      // If offline and have downloaded data, use it immediately
-      if (isOffline && hasOfflineData) {
-        debugPrint('[CategoryReels] Loading from offline storage...');
-        final offlineReels = await OfflineDownloadService().getOfflineReels();
-        debugPrint('[CategoryReels] Got ${offlineReels.length} offline reels');
-        
-        // Filter by category
-        final categoryReels = offlineReels.where(
-          (r) => (r['category'] as String?)?.toLowerCase() == widget.category.toLowerCase()
-        ).toList();
-        debugPrint('[CategoryReels] Filtered to ${categoryReels.length} reels for category: ${widget.category}');
-        
-        reels = categoryReels.map((json) {
-          // Use local video path if available
-          final localVideoPath = json['local_video_path'] as String?;
-          return Reel.fromJson({
-            ...json,
-            if (localVideoPath != null) 'video_url': localVideoPath,
-          });
-        }).toList();
-      } else {
-        // Try network
-        try {
-          reels = await _reelService.getReelsByCategory(widget.category);
-        } catch (e) {
-          debugPrint('[CategoryReels] Network failed: $e');
-          // Network failed, try offline data as fallback
-          if (hasOfflineData) {
-            final offlineReels = await OfflineDownloadService().getOfflineReels();
-            final categoryReels = offlineReels.where(
-              (r) => (r['category'] as String?)?.toLowerCase() == widget.category.toLowerCase()
-            ).toList();
-            
-            reels = categoryReels.map((json) {
-              final localVideoPath = json['local_video_path'] as String?;
-              return Reel.fromJson({
-                ...json,
-                if (localVideoPath != null) 'video_url': localVideoPath,
-              });
-            }).toList();
-          } else {
-            rethrow;
-          }
-        }
-      }
+      // OFFLINE FEATURE DISABLED - Always use network
+      final reels = await _reelService.getReelsByCategory(widget.category);
 
       if (!mounted) return;
 
@@ -284,11 +298,15 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
       const String playStoreLink =
           'https://play.google.com/store/apps/details?id=com.megg.megg';
       final String categoryName = widget.category;
-      final String affiliateLink = reel.affiliateLink ?? '';
+      final String reelId = reel.id;
+      
+      final String deepLink = 'https://link.meggfashion.in/guides/$categoryName/$reelId';
 
       final String shareText =
-          'Browse the $categoryName from here $affiliateLink. '
-          'For more download this app from play store. $playStoreLink';
+          '✨ Check out this $categoryName style inspiration! ✨\n\n'
+          '$deepLink\n\n'
+          '📲 Get the MEGG app for more style guides, outfit ideas & fashion tips:\n'
+          '$playStoreLink';
 
       await Share.share(shareText);
     } catch (e) {
@@ -395,6 +413,9 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
           _reelKeys[reelIndex] = GlobalKey<_ReelItemState>();
         }
 
+        final isAdjacentReel = (reelIndex == (_currentPageIndex + 1) % _reels.length) ||
+            (reelIndex == (_currentPageIndex - 1 + _reels.length) % _reels.length);
+
         return _ReelItem(
           key: _reelKeys[reelIndex],
           reel: reel,
@@ -404,11 +425,16 @@ class _CategoryReelsScreenState extends State<CategoryReelsScreen>
           onShopTap: () => _handleShopTap(reel),
           onShareTap: () => _shareReel(reel),
           isCurrentPage: reelIndex == _currentPageIndex,
+          shouldPreload: isAdjacentReel,
           isMutedDueToCall: _isMutedDueToCall,
         );
       },
       onPageChanged: (index) {
         final newIndex = index % _reels.length;
+        
+        // Mark that user has scrolled
+        _hasUserScrolled = true;
+        _scrollHintTimer?.cancel();
 
         // Update current index and track view
         setState(() => _currentPageIndex = newIndex);
@@ -521,6 +547,7 @@ class _ReelItem extends StatefulWidget {
   final VoidCallback onShopTap;
   final VoidCallback onShareTap;
   final bool isCurrentPage;
+  final bool shouldPreload; // For preloading adjacent reels
   final bool isMutedDueToCall;
 
   const _ReelItem({
@@ -532,6 +559,7 @@ class _ReelItem extends StatefulWidget {
     required this.onShopTap,
     required this.onShareTap,
     required this.isCurrentPage,
+    this.shouldPreload = false,
     this.isMutedDueToCall = false,
   });
 
@@ -571,6 +599,8 @@ class _ReelItemState extends State<_ReelItem>
       } else {
         pauseVideo();
       }
+    } else if (widget.shouldPreload && !oldWidget.shouldPreload && !_isInitialized) {
+      _initializeVideo();
     }
 
     if (widget.isMutedDueToCall != oldWidget.isMutedDueToCall) {
@@ -585,9 +615,15 @@ class _ReelItemState extends State<_ReelItem>
   }
 
   Future<void> _initializeVideo() async {
+    // Only initialize if current page OR should preload
+    if (!widget.isCurrentPage && !widget.shouldPreload) {
+      return;
+    }
+
+    // Small delay for non-current pages to reduce initial load
     if (!widget.isCurrentPage) {
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (!mounted || widget.isCurrentPage) return;
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
     }
 
     try {
@@ -608,8 +644,7 @@ class _ReelItemState extends State<_ReelItem>
 
       _controller!.setLooping(true);
 
-      // Only auto-play if this is the current page
-      if (widget.isCurrentPage) {
+     if (widget.isCurrentPage) {
         _controller!.play();
       }
     } catch (e) {
@@ -782,7 +817,6 @@ class _ReelItemState extends State<_ReelItem>
               ),
             ),
 
-          // Action buttons (Right Side - Centered vertically for one-handed use)
           Positioned(
             right: 16,
             top: 0,

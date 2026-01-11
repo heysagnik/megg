@@ -3,6 +3,7 @@ import 'package:megg/screens/search_screen.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/aesthetic_app_bar.dart';
+import '../widgets/lazy_image.dart';
 import '../services/offer_service.dart';
 import 'category_browse_screen.dart';
 import '../widgets/loader.dart';
@@ -231,21 +232,19 @@ class _ExploreScreenState extends State<ExploreScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              imageUrl,
+            LazyImage(
+              imageUrl: imageUrl,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: Colors.grey[100],
-                  child: Center(
-                    child: Icon(
-                      PhosphorIconsRegular.image,
-                      size: 48,
-                      color: Colors.grey[400],
-                    ),
+              errorWidget: Container(
+                color: Colors.grey[100],
+                child: Center(
+                  child: Icon(
+                    PhosphorIconsRegular.image,
+                    size: 48,
+                    color: Colors.grey[400],
                   ),
-                );
-              },
+                ),
+              ),
             ),
             Container(
               decoration: BoxDecoration(

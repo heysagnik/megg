@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class Product {
   final String id;
   final String name;
@@ -9,6 +11,7 @@ class Product {
   final String color;
   final String? description;
   final String? affiliateLink;
+  final List<String> fabric;
   final int clicks;
   final int popularity;
 
@@ -23,6 +26,7 @@ class Product {
     required this.color,
     this.description,
     this.affiliateLink,
+    this.fabric = const [],
     this.clicks = 0,
     this.popularity = 0,
   });
@@ -38,8 +42,48 @@ class Product {
       return 0.0;
     }
 
-    // Parse images - handle both list and single string
+   
+    String extractImageUrl(String imageString, {String preferredSize = 'medium'}) {
+      final trimmed = imageString.trim();
+      
+      // Check if it's a JSON string (starts with '{')
+      if (trimmed.startsWith('{')) {
+        try {
+          final Map<String, dynamic> imageJson = jsonDecode(trimmed);
+          // Try preferred size first, then fallback in order
+          final sizes = [preferredSize, 'medium', 'large', 'original', 'thumb'];
+          for (final size in sizes) {
+            if (imageJson.containsKey(size) && imageJson[size] != null && imageJson[size].toString().isNotEmpty) {
+              return imageJson[size].toString();
+            }
+          }
+        } catch (e) {
+          // If JSON parsing fails, return the original string
+          return trimmed;
+        }
+      }
+      
+      // Return as-is if it's already a plain URL
+      return trimmed;
+    }
+
+    // Parse images - handle list of stringified JSON or plain URLs
     List<String> parseImages(dynamic value) {
+      if (value == null) return [];
+      if (value is List) {
+        return value
+            .map((e) => extractImageUrl(e.toString()))
+            .where((s) => s.isNotEmpty)
+            .toList();
+      }
+      if (value is String && value.isNotEmpty) {
+        return [extractImageUrl(value)];
+      }
+      return [];
+    }
+
+    // Parse fabric list
+    List<String> parseFabric(dynamic value) {
       if (value == null) return [];
       if (value is List) {
         return value.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
@@ -61,6 +105,7 @@ class Product {
       color: json['color']?.toString() ?? '',
       description: json['description']?.toString(),
       affiliateLink: json['affiliate_link']?.toString(),
+      fabric: parseFabric(json['fabric']),
       clicks: (json['clicks'] as num?)?.toInt() ?? 0,
       popularity: (json['popularity'] as num?)?.toInt() ?? 0,
     );
@@ -78,6 +123,7 @@ class Product {
       'color': color,
       if (description != null) 'description': description,
       if (affiliateLink != null) 'affiliate_link': affiliateLink,
+      if (fabric.isNotEmpty) 'fabric': fabric,
       'clicks': clicks,
       'popularity': popularity,
     };

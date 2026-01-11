@@ -6,6 +6,7 @@ import '../services/product_service.dart';
 import '../services/auth_service.dart';
 import '../services/wishlist_service.dart';
 import 'login_required_dialog.dart';
+import 'lazy_image.dart';
 
 // ============================================================================
 // UNIVERSAL PRODUCT GRID
@@ -753,30 +754,19 @@ class _ProductCardState extends State<ProductCard>
     }
 
     if (widget.product.images.length == 1 || widget.pageController == null) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          image: DecorationImage(
-            image: NetworkImage(widget.product.images[0]),
-            fit: BoxFit.cover,
-          ),
-        ),
+      return LazyImage(
+        imageUrl: widget.product.images[0],
+        fit: BoxFit.cover,
       );
     }
 
     return PageView.builder(
       controller: widget.pageController,
-      // itemCount is removed to allow infinite scrolling
       itemBuilder: (context, index) {
         final imageIndex = index % widget.product.images.length;
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            image: DecorationImage(
-              image: NetworkImage(widget.product.images[imageIndex]),
-              fit: BoxFit.cover,
-            ),
-          ),
+        return LazyImage(
+          imageUrl: widget.product.images[imageIndex],
+          fit: BoxFit.cover,
         );
       },
     );

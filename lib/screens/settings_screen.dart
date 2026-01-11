@@ -3,8 +3,8 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/aesthetic_app_bar.dart';
 import '../services/notification_service.dart';
-import '../services/offline_download_service.dart';
-import '../widgets/download_progress_sheet.dart';
+// import '../services/offline_download_service.dart'; // OFFLINE FEATURE DISABLED
+// import '../widgets/download_progress_sheet.dart'; // OFFLINE FEATURE DISABLED
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,15 +15,15 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _notificationService = NotificationService();
-  final _offlineService = OfflineDownloadService();
+  // final _offlineService = OfflineDownloadService(); // OFFLINE FEATURE DISABLED
   bool _notificationsEnabled = true;
-  String _offlineStorageSize = '0 MB';
+  // String _offlineStorageSize = '0 MB'; // OFFLINE FEATURE DISABLED
 
   @override
   void initState() {
     super.initState();
     _loadNotificationPreference();
-    _loadOfflineInfo();
+    // _loadOfflineInfo(); // OFFLINE FEATURE DISABLED
   }
 
   Future<void> _loadNotificationPreference() async {
@@ -32,17 +32,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  /* OFFLINE FEATURE DISABLED
   Future<void> _loadOfflineInfo() async {
-    await _offlineService.init();
-    // Debug: Print what's downloaded to console
-    await _offlineService.debugPrintDownloadedContent();
-    final size = await _offlineService.getStorageSize();
-    if (mounted) {
-      setState(() {
-        _offlineStorageSize = size;
-      });
-    }
+    ...
   }
+  */
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _buildOfflineDataTile(),
+          // _buildOfflineDataTile(), // OFFLINE FEATURE DISABLED
           const SizedBox(height: 40),
           _buildSection('SUPPORT'),
           const SizedBox(height: 16),
@@ -225,203 +219,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /* OFFLINE FEATURE DISABLED
   Widget _buildOfflineDataTile() {
-    final isComplete = _offlineService.progress.status == DownloadStatus.completed;
-    final isDownloading = _offlineService.isDownloading;
-
-    return ListenableBuilder(
-      listenable: _offlineService,
-      builder: (context, _) {
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: Colors.black.withOpacity(0.05), width: 1),
-            ),
-          ),
-          child: InkWell(
-            onTap: isDownloading ? _showDownloadProgress : _showOfflineOptions,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isComplete ? Colors.green[50] : Colors.grey[50],
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isComplete
-                          ? PhosphorIconsBold.checkCircle
-                          : PhosphorIconsRegular.cloudArrowDown,
-                      size: 20,
-                      color: isComplete ? Colors.green[700] : Colors.black,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'OFFLINE DATA',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isComplete
-                              ? 'Downloaded: $_offlineStorageSize'
-                              : isDownloading
-                                  ? 'Downloading...'
-                                  : 'Download for offline viewing',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[600],
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Icon(
-                    PhosphorIconsRegular.caretRight,
-                    size: 16,
-                    color: Colors.grey[400],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+    ...
   }
 
   void _showOfflineOptions() {
-    final isComplete = _offlineService.progress.status == DownloadStatus.completed;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'OFFLINE DATA',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 2.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isComplete
-                    ? 'You have $_offlineStorageSize of offline content stored.'
-                    : 'Download color combos and reels for offline viewing.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[600],
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const SizedBox(height: 24),
-              if (isComplete) ...[
-                // Clear data button
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      await _offlineService.clearOfflineData();
-                      await _loadOfflineInfo();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('OFFLINE DATA CLEARED'),
-                            backgroundColor: Colors.black,
-                          ),
-                        );
-                      }
-                    },
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      foregroundColor: Colors.red[400],
-                      side: BorderSide(color: Colors.red[400]!),
-                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                    ),
-                    child: const Text(
-                      'CLEAR OFFLINE DATA',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                ),
-              ] else ...[
-                // Download button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _offlineService.startDownload();
-                      _showDownloadProgress();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'DOWNLOAD NOW',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Center(
-                  child: Text(
-                    'Estimated: ~250 MB',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[500],
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
+    ...
   }
 
   void _showDownloadProgress() {
-    DownloadProgressSheet.showModal(context);
+    ...
   }
+  */
 
   void _showReviewDialog() {
     int rating = 0;

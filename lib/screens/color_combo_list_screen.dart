@@ -1,13 +1,14 @@
-import 'dart:io';
+// import 'dart:io'; // OFFLINE FEATURE DISABLED
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../models/color_combo.dart';
 import '../services/color_combo_service.dart';
 import '../services/connectivity_service.dart';
-import '../services/offline_download_service.dart';
+// import '../services/offline_download_service.dart'; // OFFLINE FEATURE DISABLED
 import '../widgets/aesthetic_app_bar.dart';
+import '../widgets/custom_refresh_indicator.dart';
 import '../widgets/loader.dart';
-import '../widgets/offline_banner.dart';
+import '../widgets/lazy_image.dart';
 import 'color_combo_detail_screen.dart';
 
 class ColorComboListScreen extends StatefulWidget {
@@ -23,10 +24,19 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
   final ColorComboService _comboService = ColorComboService();
 
   List<ColorCombo> _combos = [];
-  Map<String, String> _localImagePaths = {}; // comboId -> local path
+  // Map<String, String> _localImagePaths = {}; // OFFLINE FEATURE DISABLED
   bool _isLoading = true;
-  bool _isOfflineMode = false;
+  // bool _isOfflineMode = false; // OFFLINE FEATURE DISABLED
   String? _error;
+
+  // Color filter state
+  List<String> _availableColorsA = [];
+  List<String> _availableColorsB = [];
+  List<String> _availableColorsC = [];
+  String? _selectedColorA;
+  String? _selectedColorB;
+  String? _selectedColorC;
+  bool _showFilters = false;
 
   @override
   void initState() {
@@ -34,64 +44,35 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
     _loadCombos();
   }
 
-  Future<void> _loadCombos() async {
-    debugPrint('[ComboList] ========== _loadCombos START ==========');
-    debugPrint('[ComboList] groupType: ${widget.groupType}');
-    
+  Future<void> _loadCombos({bool withFilters = false}) async {
     try {
       setState(() {
         _isLoading = true;
         _error = null;
-        _isOfflineMode = false;
       });
 
-      final hasOfflineContent = OfflineDownloadService().isOfflineModeEnabled;
-      debugPrint('[ComboList] isOfflineModeEnabled: $hasOfflineContent');
-      
-      if (hasOfflineContent) {
-        debugPrint('[ComboList] Offline mode enabled. Attempting to load from local cache...');
-        await _loadOfflineCombos();
-        
-        // If we found offline combos, we are done.
-        if (_combos.isNotEmpty) {
-          debugPrint('[ComboList] Loaded ${_combos.length} combos from offline cache.');
-          return;
-        }
-        
-        debugPrint('[ComboList] No suitable offline content found. Falling back to network...');
-      } else {
-        debugPrint('[ComboList] Offline mode disabled. Proceeding with network fetch.');
-      }
-
-      // No local content or fallback needed, try network
-      final isOffline = ConnectivityService().isOffline;
-      debugPrint('[ComboList] ConnectivityService.isOffline: $isOffline');
-      
-      if (isOffline) {
-        debugPrint('[ComboList] Device is offline. Cannot fetch from network.');
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-          _error = 'No internet connection and no offline content available';
-        });
-        return;
-      }
-
-      debugPrint('[ComboList] Fetching from network via ColorComboService.getCombosByGroup("${widget.groupType}") with forceRefresh...');
-      
+      // OFFLINE FEATURE DISABLED - Always use network
       try {
-        final combos = await _comboService.getCombosByGroup(widget.groupType, forceRefresh: true);
-        debugPrint('[ComboList] Network fetch SUCCESS. Received ${combos.length} combos.');
+        final result = await _comboService.getColorCombosWithMeta(
+          group: widget.groupType,
+          colorA: _selectedColorA,
+          colorB: _selectedColorB,
+          colorC: _selectedColorC,
+          forceRefresh: true,
+        );
 
         if (!mounted) return;
 
         setState(() {
-          _combos = combos;
+          _combos = result.combos;
+          if (!withFilters) {
+            _availableColorsA = result.colorsA;
+            _availableColorsB = result.colorsB;
+            _availableColorsC = result.colorsC;
+          }
           _isLoading = false;
         });
-        debugPrint('[ComboList] State updated. _combos.length = ${_combos.length}');
       } catch (e) {
-        debugPrint('[ComboList] Network fetch FAILED: $e');
         if (!mounted) return;
         setState(() {
           _isLoading = false;
@@ -99,164 +80,358 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
         });
       }
     } catch (e) {
-      debugPrint('[ComboList] OUTER EXCEPTION: $e');
       if (!mounted) return;
-
       setState(() {
         _isLoading = false;
         _error = e.toString().replaceAll('Exception: ', '');
       });
     }
-    debugPrint('[ComboList] ========== _loadCombos END ==========');
   }
 
+  /* OFFLINE FEATURE DISABLED
   Future<void> _loadOfflineCombos() async {
-    final offlineCombos = await OfflineDownloadService().getOfflineCombos();
-    
-    if (offlineCombos.isEmpty) {
-      debugPrint('[ComboList] No offline combos found in metadata.');
-      return;
-    }
-
-    // Filter by group type if applicable
-    final filteredCombos = offlineCombos.where((c) {
-      final group = c['group_type'] ?? c['occasion'] ?? '';
-      return group.toString().toLowerCase() == widget.groupType.toLowerCase();
-    }).toList();
-
-    // Build local image paths map
-    final localPaths = <String, String>{};
-    for (final combo in filteredCombos) {
-      final id = combo['id'] as String;
-      final localPath = combo['local_image_path'] as String?;
-      if (localPath != null) {
-        localPaths[id] = localPath;
-      }
-    }
-
-    // Convert to ColorCombo objects
-    final combos = filteredCombos.map((c) => ColorCombo.fromJson(c)).toList();
-
-    if (!mounted) return;
-
-    setState(() {
-      _combos = combos;
-      _localImagePaths = localPaths;
-      _isLoading = false;
-      _isOfflineMode = true;
-    });
+    ...
   }
+  */
+
+  void _applyFilter(String? colorA, String? colorB, String? colorC) {
+    setState(() {
+      _selectedColorA = colorA;
+      _selectedColorB = colorB;
+      _selectedColorC = colorC;
+    });
+    _loadCombos(withFilters: true);
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _selectedColorA = null;
+      _selectedColorB = null;
+      _selectedColorC = null;
+    });
+    _loadCombos();
+  }
+
+  bool get _hasActiveFilters => 
+      _selectedColorA != null || _selectedColorB != null || _selectedColorC != null;
 
   @override
   Widget build(BuildContext context) {
     final displayTitle = widget.groupType.toUpperCase();
 
     return Scaffold(
-      appBar: AestheticAppBar(title: displayTitle, showBackButton: true),
-      body: Builder(
-        builder: (context) {
-          if (_isLoading) {
-            return const Center(child: Loader());
-          }
-
-          if (_error != null) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'UNABLE TO LOAD',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey[700],
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    OutlinedButton(
-                      onPressed: _loadCombos,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 14,
-                        ),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero,
-                        ),
-                      ),
-                      child: const Text(
-                        'RETRY',
-                        style: TextStyle(
-                          fontSize: 11,
-                          letterSpacing: 2,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          if (_combos.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      appBar: AestheticAppBar(
+        title: displayTitle, 
+        showBackButton: true,
+        actions: [
+          if (_availableColorsA.isNotEmpty || _availableColorsB.isNotEmpty)
+            IconButton(
+              icon: Stack(
                 children: [
                   Icon(
-                    PhosphorIconsRegular.warningCircle,
-                    size: 64,
-                    color: Colors.grey[400],
+                    _showFilters ? PhosphorIconsFill.funnel : PhosphorIconsRegular.funnel,
+                    size: 20,
+                    color: _hasActiveFilters ? Colors.black : Colors.grey[700],
                   ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'NO COLOR COMBOS AVAILABLE',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      letterSpacing: 2,
+                  if (_hasActiveFilters)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.black,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
-            );
-          }
-
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 16,
+              onPressed: () {
+                setState(() => _showFilters = !_showFilters);
+              },
+              splashRadius: 20,
             ),
-            itemCount: _combos.length,
-            itemBuilder: (context, index) {
-              final combo = _combos[index];
-              return _buildComboCard(context, combo);
-            },
-          );
-        },
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Color filter bar
+          if (_showFilters)
+            _buildColorFilterBar(),
+          
+          // Main content
+          Expanded(
+            child: Builder(
+              builder: (context) {
+                if (_isLoading) {
+                  return const Center(child: Loader());
+                }
+
+                if (_error != null) {
+                  return _buildErrorState();
+                }
+
+                if (_combos.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return CustomRefreshIndicator(
+                  onRefresh: () => _loadCombos(withFilters: _hasActiveFilters),
+                  child: GridView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.75,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: _combos.length,
+                    itemBuilder: (context, index) {
+                      final combo = _combos[index];
+                      return _buildComboCard(context, combo);
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColorFilterBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        border: Border(
+          bottom: BorderSide(color: Colors.grey[200]!),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Filter label with clear button
+          Row(
+            children: [
+              Text(
+                'FILTER BY COLOR',
+                style: TextStyle(
+                  fontFamily: 'FuturaCyrillicBook',
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const Spacer(),
+              if (_hasActiveFilters)
+                GestureDetector(
+                  onTap: _clearFilters,
+                  child: Text(
+                    'CLEAR',
+                    style: TextStyle(
+                      fontFamily: 'FuturaCyrillicBook',
+                      fontSize: 10,
+                      letterSpacing: 1,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          
+          // Color rows
+          if (_availableColorsA.isNotEmpty) ...[
+            _buildColorRow('TOP', _availableColorsA, _selectedColorA, (color) {
+              _applyFilter(color, _selectedColorB, _selectedColorC);
+            }),
+            const SizedBox(height: 10),
+          ],
+          if (_availableColorsB.isNotEmpty) ...[
+            _buildColorRow('BOTTOM', _availableColorsB, _selectedColorB, (color) {
+              _applyFilter(_selectedColorA, color, _selectedColorC);
+            }),
+          ],
+          if (_availableColorsC.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildColorRow('ACCENT', _availableColorsC, _selectedColorC, (color) {
+              _applyFilter(_selectedColorA, _selectedColorB, color);
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColorRow(String label, List<String> colors, String? selected, Function(String?) onSelect) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 50,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'FuturaCyrillicBook',
+              fontSize: 9,
+              letterSpacing: 1,
+              color: Colors.grey[500],
+            ),
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: colors.map((hex) {
+                final isSelected = selected == hex;
+                return GestureDetector(
+                  onTap: () => onSelect(isSelected ? null : hex),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: _hexToColor(hex),
+                      border: Border.all(
+                        color: isSelected ? Colors.black : Colors.grey[300]!,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: isSelected
+                        ? Icon(
+                            Icons.check,
+                            size: 14,
+                            color: _isLightColor(hex) ? Colors.black : Colors.white,
+                          )
+                        : null,
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _hexToColor(String hex) {
+    try {
+      final cleanHex = hex.replaceAll('#', '');
+      return Color(int.parse('FF$cleanHex', radix: 16));
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+
+  bool _isLightColor(String hex) {
+    final color = _hexToColor(hex);
+    final luminance = 0.299 * color.red + 0.587 * color.green + 0.114 * color.blue;
+    return luminance > 186;
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'UNABLE TO LOAD',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            OutlinedButton(
+              onPressed: _loadCombos,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                ),
+              ),
+              child: const Text(
+                'RETRY',
+                style: TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            PhosphorIconsRegular.warningCircle,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _hasActiveFilters 
+                ? 'NO COMBOS MATCH FILTERS'
+                : 'NO COLOR COMBOS AVAILABLE',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              letterSpacing: 2,
+            ),
+          ),
+          if (_hasActiveFilters) ...[
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: _clearFilters,
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              ),
+              child: const Text(
+                'CLEAR FILTERS',
+                style: TextStyle(fontSize: 11, letterSpacing: 1.5),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -268,9 +443,9 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
     final colorB =
         combo.colorB ??
         (combo.comboColors.isNotEmpty ? combo.comboColors.first : null);
+    final colorC = combo.colorC;
 
-    // Check for local image path (offline mode)
-    final localImagePath = _localImagePaths[combo.id];
+    // OFFLINE FEATURE DISABLED - always use network images
 
     return GestureDetector(
       onTap: () {
@@ -290,28 +465,44 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
           children: [
             // Model Image
             Expanded(
-              child: _buildComboImage(combo, localImagePath),
+              child: _buildComboImage(combo),
             ),
 
-            // Color Swatches & Names (Vertical)
+            // Color Swatches & Names
             Padding(
               padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // First color swatch + name
-                  _buildColorSwatchWithName(
-                    colorA,
-                    colorNames.isNotEmpty ? colorNames[0] : '',
+                  // Row with Color A and Color C (if exists) side by side
+                  Row(
+                    children: [
+                      if (colorA != null)
+                        Expanded(
+                          child: _buildColorSwatchWithName(
+                            colorA,
+                            colorNames.isNotEmpty ? colorNames[0] : 'Color A',
+                          ),
+                        ),
+                      if (colorC != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildColorSwatchWithName(
+                            colorC,
+                            colorNames.length > 2 ? colorNames[2] : 'Color C',
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  if (colorB != null) ...[
-                    const SizedBox(height: 6),
-                    // Second color swatch + name
+                  const SizedBox(height: 4),
+                  // Color B below
+                  if (colorB != null)
                     _buildColorSwatchWithName(
                       colorB,
-                      colorNames.length > 1 ? colorNames[1] : '',
+                      colorNames.length > 1 ? colorNames[1] : 'Color B',
                     ),
-                  ],
                 ],
               ),
             ),
@@ -321,28 +512,15 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
     );
   }
 
-  Widget _buildComboImage(ColorCombo combo, String? localImagePath) {
-    // Use local image if available (offline mode)
-    if (localImagePath != null && File(localImagePath).existsSync()) {
-      return Image.file(
-        File(localImagePath),
-        fit: BoxFit.cover,
-        width: double.infinity,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildPlaceholderImage();
-        },
-      );
-    }
-
-    // Use network image
+  Widget _buildComboImage(ColorCombo combo) {
+    // OFFLINE FEATURE DISABLED - always use network images
     if (combo.modelImageMedium.isNotEmpty) {
-      return Image.network(
-        combo.modelImageMedium,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildPlaceholderImage();
-        },
+      return SizedBox.expand(
+        child: LazyImage(
+          imageUrl: combo.modelImageMedium,
+          fit: BoxFit.cover,
+          alignment: Alignment.topCenter,
+        ),
       );
     }
 
@@ -386,14 +564,15 @@ class _ColorComboListScreenState extends State<ColorComboListScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
+        Flexible(
           child: Text(
             colorName.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w400,
-              letterSpacing: 0.8,
-              height: 1.2,
+            style: TextStyle(
+              fontFamily: 'FuturaCyrillicBook',
+              fontSize: 9,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.5,
+              color: Colors.grey[700],
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
